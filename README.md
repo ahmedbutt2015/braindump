@@ -29,7 +29,7 @@ Most note apps just store what you write. BrainDump is context-aware — when yo
 | UI | shadcn/ui + Tailwind CSS v4 | Built on Radix UI primitives |
 | Data fetching | SWR | Optimistic updates, auto-revalidation |
 | Backend | Next.js API Routes | Same repo, deployed as Vercel serverless functions — no Express, no separate server |
-| AI | OpenAI GPT-4o-mini via Vercel AI SDK | Structured output via Zod schema |
+| AI | Hugging Face `mistralai/Mistral-7B-Instruct-v0.3` | Free tier, direct API call, JSON parsed + Zod validated |
 | Database | Supabase (PostgreSQL) | Accessed via `@supabase/ssr` |
 | Auth | Supabase Auth | JWT-based, cookie refresh on every request via middleware |
 | Voice | Web Speech API (browser-native, free) | Falls back to Hugging Face Whisper-large-v3 (free tier, ~20s cold starts) |
@@ -62,8 +62,7 @@ tasks
 ```env
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
-OPENAI_API_KEY=
-HUGGINGFACE_API_TOKEN=   # optional, for Whisper voice fallback
+HUGGINGFACE_API_TOKEN=   # required — used for both task extraction (Mistral-7B) and voice transcription (Whisper)
 ```
 
 ## Getting Started
@@ -93,7 +92,7 @@ npm run dev
 
 ### Critical (block shipping)
 - **Supabase RLS not verified** — if row-level security is misconfigured, user A can read user B's data. Must be confirmed before going public
-- **No rate limiting** on `/api/extract-tasks` or `/api/transcribe` — a single user can run up the OpenAI bill with no guardrail
+- **No rate limiting** on `/api/extract-tasks` or `/api/transcribe` — a single user can exhaust Hugging Face free tier quota with no guardrail
 - **Smart task linking not built** — the AI only avoids duplicates today; it does not enrich or update existing tasks when a new dump references them. This is the whole point of the app
 
 ### Usability Gaps

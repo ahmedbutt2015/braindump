@@ -16,11 +16,15 @@ Example: user dumps "met Jake at the networking event, he's a hiring manager at 
 
 The middleware at `middleware.ts` calls `lib/supabase/middleware.ts` which refreshes the session cookie on every request. Protected routes redirect to `/auth/login`.
 
-**AI:** Uses Vercel AI SDK (`ai` package) with `generateText` + `Output.object()` for structured output. Model: `openai/gpt-4o-mini`. The API route at `app/api/extract-tasks/route.ts` does the full pipeline:
-1. Fetch last 5 brain dumps for context
-2. Fetch last 10 pending tasks (to avoid duplicates)
-3. Pass all context to GPT-4o-mini with a Zod schema for structured output
-4. Save the dump + extracted tasks to Supabase
+**AI (task extraction):** `app/api/extract-tasks/route.ts` calls Hugging Face directly via `fetch` — no Vercel AI SDK, no OpenAI. Model: `mistralai/Mistral-7B-Instruct-v0.3` via the HF OpenAI-compatible chat completions endpoint (`/v1/chat/completions`). Pipeline:
+1. Fetch last 5 brain dumps + last 10 pending tasks for context
+2. POST to HF with a system prompt that demands raw JSON output (no markdown)
+3. Strip any accidental code fences from the response, then `JSON.parse` + Zod validate
+4. Save dump + tasks to Supabase
+
+Uses `HUGGINGFACE_API_TOKEN` — the same token used by the voice transcription route. No OpenAI key needed anywhere.
+
+Cold-start handling: HF free tier returns `{ error: "...loading..." }` with status 503. The route returns `{ modelLoading: true, retryAfter: N }` and the dashboard shows a warning toast with the wait time.
 
 **Voice (not yet on main):** Branch `voice-command-generation` has:
 - `components/voice-input-button.tsx` — tries Web Speech API first, falls back to Hugging Face Whisper if browser doesn't support it or mic is denied
@@ -117,7 +121,7 @@ There is **no separate backend server**. This is a single full-stack Next.js app
 - **Backend:** Next.js API Routes in the same repo — deployed as Vercel serverless functions. No Express, no separate process
 - **Database:** Supabase (hosted PostgreSQL). Accessed via `@supabase/ssr` — two modes: server (cookie-based) and browser (singleton)
 - **Auth:** Supabase Auth. JWT tokens. Middleware refreshes the session cookie on every request
-- **AI:** OpenAI GPT-4o-mini via Vercel AI SDK (`generateText` + `Output.object()` for structured Zod output)
+- **AI:** Hugging Face `mistralai/Mistral-7B-Instruct-v0.3` for task extraction + `openai/whisper-large-v3` for voice — both via direct `fetch` to HF API, free tier, one shared `HUGGINGFACE_API_TOKEN`
 - **Voice:** Web Speech API (browser-native, zero cost) → Hugging Face Whisper-large-v3 fallback (free tier, ~20s cold start on first use)
 - **Hosting:** Vercel — frontend + serverless functions deploy together
 
@@ -126,6 +130,5 @@ There is **no separate backend server**. This is a single full-stack Next.js app
 ```
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
-OPENAI_API_KEY
-HUGGINGFACE_API_TOKEN   # only needed for voice transcription fallback
+HUGGINGFACE_API_TOKEN   # required — covers both task extraction (Mistral-7B) and voice transcription (Whisper)
 ```

@@ -67,11 +67,20 @@ export function DashboardContent({
         body: JSON.stringify({ content })
       })
 
+      const result = await response.json()
+
       if (!response.ok) {
-        throw new Error('Failed to process brain dump')
+        if (result.modelLoading) {
+          toast.warning('AI model is warming up', {
+            description: `Try again in ~${result.retryAfter ?? 20} seconds. Hugging Face free tier needs a moment to start.`,
+            duration: 8000,
+          })
+        } else {
+          toast.error(result.error ?? 'Failed to process your thoughts. Please try again.')
+        }
+        return
       }
 
-      const result = await response.json()
       toast.success(`Extracted ${result.tasksExtracted} task${result.tasksExtracted !== 1 ? 's' : ''}`, {
         description: result.summary,
       })
@@ -82,7 +91,7 @@ export function DashboardContent({
       ])
     } catch (error) {
       console.error('Error processing brain dump:', error)
-      toast.error('Failed to process your thoughts. Please try again.')
+      toast.error('Failed to process your thoughts. Check your connection and try again.')
     } finally {
       setIsProcessing(false)
     }
