@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     }
 
     // Check for HuggingFace API token
-    const hfToken = process.env.HUGGINGFACE_API_TOKEN
+    const hfToken = process.env.NEXT_PUBLIC_HUGGINGFACE_API_TOKEN
     if (!hfToken) {
       return Response.json({ 
         error: 'Hugging Face API token not configured',
