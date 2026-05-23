@@ -3,80 +3,60 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ── Design tokens — violet accent, neutral base ────────────────────────── */
 :root {
-  --background: oklch(0.98 0.005 220);
-  --foreground: oklch(0.15 0.02 240);
+  --background: oklch(0.985 0.004 270);
+  --foreground: oklch(0.16 0.018 270);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.15 0.02 240);
+  --card-foreground: oklch(0.16 0.018 270);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.15 0.02 240);
-  --primary: oklch(0.65 0.18 195);
+  --popover-foreground: oklch(0.16 0.018 270);
+  --primary: oklch(0.62 0.20 290);
   --primary-foreground: oklch(0.98 0 0);
-  --secondary: oklch(0.95 0.01 220);
-  --secondary-foreground: oklch(0.25 0.02 240);
-  --muted: oklch(0.94 0.01 220);
-  --muted-foreground: oklch(0.5 0.02 240);
-  --accent: oklch(0.75 0.15 175);
-  --accent-foreground: oklch(0.15 0.02 240);
+  --secondary: oklch(0.96 0.006 270);
+  --secondary-foreground: oklch(0.25 0.02 270);
+  --muted: oklch(0.94 0.01 270);
+  --muted-foreground: oklch(0.55 0.015 270);
+  --accent: oklch(0.93 0.04 290);
+  --accent-foreground: oklch(0.42 0.18 290);
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.98 0 0);
-  --border: oklch(0.88 0.02 220);
-  --input: oklch(0.92 0.01 220);
-  --ring: oklch(0.65 0.18 195);
-  --chart-1: oklch(0.65 0.18 195);
-  --chart-2: oklch(0.75 0.15 175);
-  --chart-3: oklch(0.55 0.12 240);
-  --chart-4: oklch(0.70 0.10 160);
-  --chart-5: oklch(0.60 0.14 210);
-  --radius: 0.75rem;
-  --sidebar: oklch(0.98 0.005 220);
-  --sidebar-foreground: oklch(0.15 0.02 240);
-  --sidebar-primary: oklch(0.65 0.18 195);
-  --sidebar-primary-foreground: oklch(0.98 0 0);
-  --sidebar-accent: oklch(0.94 0.02 220);
-  --sidebar-accent-foreground: oklch(0.25 0.02 240);
-  --sidebar-border: oklch(0.88 0.02 220);
-  --sidebar-ring: oklch(0.65 0.18 195);
+  --border: oklch(0.91 0.008 270);
+  --input: oklch(0.96 0.006 270);
+  --ring: oklch(0.62 0.20 290);
+  --chart-1: oklch(0.62 0.20 290);
+  --chart-2: oklch(0.65 0.18 25);
+  --chart-3: oklch(0.78 0.14 80);
+  --chart-4: oklch(0.72 0.10 200);
+  --chart-5: oklch(0.70 0.12 155);
+  --radius: 0.875rem;
 }
 
 .dark {
-  --background: oklch(0.12 0.02 240);
-  --foreground: oklch(0.95 0.01 220);
-  --card: oklch(0.16 0.02 240);
-  --card-foreground: oklch(0.95 0.01 220);
-  --popover: oklch(0.16 0.02 240);
-  --popover-foreground: oklch(0.95 0.01 220);
-  --primary: oklch(0.70 0.18 195);
-  --primary-foreground: oklch(0.12 0.02 240);
-  --secondary: oklch(0.22 0.02 240);
-  --secondary-foreground: oklch(0.95 0.01 220);
-  --muted: oklch(0.22 0.02 240);
-  --muted-foreground: oklch(0.65 0.02 220);
-  --accent: oklch(0.75 0.15 175);
-  --accent-foreground: oklch(0.12 0.02 240);
+  --background: oklch(0.135 0.012 270);
+  --foreground: oklch(0.97 0.004 270);
+  --card: oklch(0.18 0.015 270);
+  --card-foreground: oklch(0.97 0.004 270);
+  --popover: oklch(0.18 0.015 270);
+  --popover-foreground: oklch(0.97 0.004 270);
+  --primary: oklch(0.72 0.20 290);
+  --primary-foreground: oklch(0.13 0.012 270);
+  --secondary: oklch(0.22 0.018 270);
+  --secondary-foreground: oklch(0.85 0.008 270);
+  --muted: oklch(0.22 0.018 270);
+  --muted-foreground: oklch(0.65 0.014 270);
+  --accent: oklch(0.32 0.10 290);
+  --accent-foreground: oklch(0.85 0.20 290);
   --destructive: oklch(0.55 0.22 25);
   --destructive-foreground: oklch(0.95 0 0);
-  --border: oklch(0.28 0.02 240);
-  --input: oklch(0.22 0.02 240);
-  --ring: oklch(0.70 0.18 195);
-  --chart-1: oklch(0.70 0.18 195);
-  --chart-2: oklch(0.75 0.15 175);
-  --chart-3: oklch(0.60 0.12 240);
-  --chart-4: oklch(0.72 0.10 160);
-  --chart-5: oklch(0.65 0.14 210);
-  --sidebar: oklch(0.14 0.02 240);
-  --sidebar-foreground: oklch(0.95 0.01 220);
-  --sidebar-primary: oklch(0.70 0.18 195);
-  --sidebar-primary-foreground: oklch(0.12 0.02 240);
-  --sidebar-accent: oklch(0.22 0.02 240);
-  --sidebar-accent-foreground: oklch(0.95 0.01 220);
-  --sidebar-border: oklch(0.28 0.02 240);
-  --sidebar-ring: oklch(0.70 0.18 195);
+  --border: oklch(0.27 0.018 270);
+  --input: oklch(0.22 0.018 270);
+  --ring: oklch(0.72 0.20 290);
 }
 
 @theme inline {
-  --font-sans: 'Geist', 'Geist Fallback';
-  --font-mono: 'Geist Mono', 'Geist Mono Fallback';
+  --font-sans: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -105,14 +85,6 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
 }
 
 @layer base {
@@ -121,5 +93,60 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: 'ss01', 'ss02';
+    letter-spacing: -0.005em;
   }
+}
+
+/* ── Voice animation keyframes ──────────────────────────────────────────── */
+
+/* Neural Pulse — scrolling EEG brainwave */
+@keyframes neural-scroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+/* Orb — breathing glow */
+@keyframes orb-pulse {
+  0%, 100% { transform: scale(1);   opacity: 0.9; }
+  50%       { transform: scale(1.18); opacity: 1;   }
+}
+@keyframes orb-ring {
+  0%   { transform: scale(1);   opacity: 0.6; }
+  100% { transform: scale(2.4); opacity: 0;   }
+}
+
+/* Ripple — expanding sonar rings */
+@keyframes ripple-expand {
+  0%   { transform: scale(0.3); opacity: 0.8; }
+  100% { transform: scale(2.2); opacity: 0;   }
+}
+
+/* Bars — audio spectrum */
+@keyframes bar-dance-1 { 0%,100%{height:30%}  25%{height:85%}  75%{height:50%}  }
+@keyframes bar-dance-2 { 0%,100%{height:60%}  40%{height:95%}  70%{height:35%}  }
+@keyframes bar-dance-3 { 0%,100%{height:45%}  30%{height:100%} 60%{height:55%}  }
+@keyframes bar-dance-4 { 0%,100%{height:70%}  50%{height:40%}  80%{height:90%}  }
+@keyframes bar-dance-5 { 0%,100%{height:35%}  20%{height:75%}  65%{height:95%}  }
+@keyframes bar-dance-6 { 0%,100%{height:55%}  45%{height:100%} 75%{height:30%}  }
+@keyframes bar-dance-7 { 0%,100%{height:25%}  35%{height:80%}  60%{height:60%}  }
+
+/* Blob — organic morphing */
+@keyframes blob-morph {
+  0%,100% { border-radius: 60% 40% 65% 35% / 55% 60% 40% 45%; transform: rotate(0deg)   scale(1);    }
+  25%     { border-radius: 45% 55% 40% 60% / 65% 35% 65% 35%; transform: rotate(45deg)  scale(1.08); }
+  50%     { border-radius: 35% 65% 55% 45% / 40% 60% 40% 60%; transform: rotate(90deg)  scale(1);    }
+  75%     { border-radius: 65% 35% 45% 55% / 55% 45% 55% 45%; transform: rotate(135deg) scale(1.06); }
+}
+
+/* Idle breathe (used for all characters when not recording) */
+@keyframes idle-breathe {
+  0%, 100% { opacity: 0.4; transform: scale(0.95); }
+  50%      { opacity: 0.7; transform: scale(1.02); }
+}
+
+/* Neural idle — flat line with slow oscillation */
+@keyframes neural-idle {
+  0%, 100% { opacity: 0.35; }
+  50%      { opacity: 0.55; }
 }

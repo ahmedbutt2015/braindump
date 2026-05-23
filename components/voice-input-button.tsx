@@ -1,37 +1,65 @@
 'use client'
 
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { Button } from '@/components/ui/button'
 import { useSpeechRecognition } from '@/hooks/use-speech-recognition'
-import { Mic, MicOff, Loader2, AlertCircle } from 'lucide-react'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
+import { VoiceAnimationDisplay, VOICE_CHARACTERS } from '@/components/voice-animations'
+import type { VoiceCharacter } from '@/components/voice-animations'
+import { cn } from '@/lib/utils'
 
 interface VoiceInputButtonProps {
   onTranscript: (text: string) => void
   disabled?: boolean
 }
 
+const STORAGE_KEY = 'bd-voice-char'
+
 export function VoiceInputButton({ onTranscript, disabled }: VoiceInputButtonProps) {
   const [isRecording, setIsRecording] = useState(false)
   const [isFallbackMode, setIsFallbackMode] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [retryCountdown, setRetryCountdown] = useState<number | null>(null)
+  const [character, setCharacter] = useState<VoiceCharacter>('neural')
+  const [pickerOpen, setPickerOpen] = useState(false)
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
   const pendingAudioRef = useRef<Blob | null>(null)
   const retryTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const pickerRef = useRef<HTMLDivElement>(null)
 
-  // Clean up retry timer on unmount
+  // Load saved character preference from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY) as VoiceCharacter | null
+      if (saved && VOICE_CHARACTERS.some(c => c.id === saved)) {
+        setCharacter(saved)
+      }
+    } catch { /* localStorage not available */ }
+  }, [])
+
+  // Close picker on outside click
+  useEffect(() => {
+    if (!pickerOpen) return
+    const handler = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setPickerOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [pickerOpen])
+
   useEffect(() => {
     return () => {
       if (retryTimerRef.current) clearInterval(retryTimerRef.current)
     }
   }, [])
+
+  const saveCharacter = (c: VoiceCharacter) => {
+    setCharacter(c)
+    setPickerOpen(false)
+    try { localStorage.setItem(STORAGE_KEY, c) } catch { /* ignore */ }
+  }
 
   const {
     isListening,
@@ -43,13 +71,9 @@ export function VoiceInputButton({ onTranscript, disabled }: VoiceInputButtonPro
   } = useSpeechRecognition({
     continuous: true,
     interimResults: true,
-    onResult: (text) => {
-      onTranscript(text)
-    },
+    onResult: (text) => { onTranscript(text) },
     onError: (err) => {
-      if (err.includes('not supported') || err.includes('denied')) {
-        setIsFallbackMode(true)
-      }
+      if (err.includes('not supported') || err.includes('denied')) setIsFallbackMode(true)
       setError(err)
     },
   })
@@ -57,15 +81,11 @@ export function VoiceInputButton({ onTranscript, disabled }: VoiceInputButtonPro
   const startRetryCountdown = useCallback((secondsUntilRetry: number, audioBlob: Blob) => {
     pendingAudioRef.current = audioBlob
     setRetryCountdown(secondsUntilRetry)
-
     retryTimerRef.current = setInterval(() => {
       setRetryCountdown(prev => {
         if (prev === null || prev <= 1) {
           if (retryTimerRef.current) clearInterval(retryTimerRef.current)
-          // Auto-retry with the saved audio blob
-          if (pendingAudioRef.current) {
-            transcribeWithHuggingFace(pendingAudioRef.current, true)
-          }
+          if (pendingAudioRef.current) transcribeWithHuggingFace(pendingAudioRef.current, true)
           return null
         }
         return prev - 1
@@ -77,39 +97,29 @@ export function VoiceInputButton({ onTranscript, disabled }: VoiceInputButtonPro
   const transcribeWithHuggingFace = useCallback(async (audioBlob: Blob, isRetry = false) => {
     if (!isRetry) setError(null)
     setIsRecording(true)
-
     try {
       const formData = new FormData()
       formData.append('audio', audioBlob)
-
-      const response = await fetch('/api/transcribe', {
-        method: 'POST',
-        body: formData,
-      })
-
+      const response = await fetch('/api/transcribe', { method: 'POST', body: formData })
       const data = await response.json()
-
       if (!response.ok) {
         if (data.modelLoading) {
-          const waitSeconds = data.retryAfter ?? 20
-          setError(`Model warming up — auto-retrying in ${waitSeconds}s`)
-          startRetryCountdown(waitSeconds, audioBlob)
+          const wait = data.retryAfter ?? 20
+          setError(`Warming up — retrying in ${wait}s`)
+          startRetryCountdown(wait, audioBlob)
         } else if (data.fallbackRequired) {
-          setError('Whisper API not configured. Switching to browser voice.')
+          setError('Whisper not configured. Switching to browser voice.')
           setIsFallbackMode(false)
         } else {
           setError(data.error || 'Transcription failed')
         }
         return
       }
-
       setError(null)
       pendingAudioRef.current = null
-      if (data.transcript) {
-        onTranscript(data.transcript)
-      }
+      if (data.transcript) onTranscript(data.transcript)
     } catch {
-      setError('Failed to transcribe audio. Check your connection.')
+      setError('Failed to transcribe. Check your connection.')
     } finally {
       setIsRecording(false)
     }
@@ -121,24 +131,18 @@ export function VoiceInputButton({ onTranscript, disabled }: VoiceInputButtonPro
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4'
       const mediaRecorder = new MediaRecorder(stream, { mimeType })
-
       mediaRecorderRef.current = mediaRecorder
       audioChunksRef.current = []
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) audioChunksRef.current.push(event.data)
-      }
-
+      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
       mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType })
-        stream.getTracks().forEach(track => track.stop())
-        await transcribeWithHuggingFace(audioBlob)
+        const blob = new Blob(audioChunksRef.current, { type: mimeType })
+        stream.getTracks().forEach(t => t.stop())
+        await transcribeWithHuggingFace(blob)
       }
-
       mediaRecorder.start()
       setIsRecording(true)
     } catch {
-      setError('Microphone access denied. Please allow microphone access.')
+      setError('Microphone access denied.')
     }
   }, [transcribeWithHuggingFace])
 
@@ -149,8 +153,7 @@ export function VoiceInputButton({ onTranscript, disabled }: VoiceInputButtonPro
     }
   }, [])
 
-  const handleToggleRecording = () => {
-    // Cancel any pending retry if user clicks the button
+  const handleToggle = () => {
     if (retryTimerRef.current) {
       clearInterval(retryTimerRef.current)
       retryTimerRef.current = null
@@ -158,13 +161,8 @@ export function VoiceInputButton({ onTranscript, disabled }: VoiceInputButtonPro
       pendingAudioRef.current = null
     }
     setError(null)
-
     if (isFallbackMode) {
-      if (isRecording) {
-        stopFallbackRecording()
-      } else {
-        startFallbackRecording()
-      }
+      isRecording ? stopFallbackRecording() : startFallbackRecording()
     } else {
       if (isListening) {
         stopListening()
@@ -179,81 +177,146 @@ export function VoiceInputButton({ onTranscript, disabled }: VoiceInputButtonPro
   }
 
   const activeListening = isListening || isRecording
-  const currentError = error || webSpeechError
   const isWarmingUp = retryCountdown !== null
+  const currentError = error || webSpeechError
 
   return (
-    <TooltipProvider>
+    <div className="flex flex-col gap-2">
+      {/* Main row: animation display + mic toggle + character picker trigger */}
       <div className="flex items-center gap-2">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant={activeListening ? 'destructive' : 'outline'}
-              size="icon"
-              onClick={handleToggleRecording}
-              disabled={disabled || isWarmingUp}
-              className="relative"
-            >
-              {activeListening ? (
-                <>
-                  <MicOff className="h-4 w-4" />
-                  <span className="absolute -top-1 -right-1 flex h-3 w-3">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75" />
-                    <span className="relative inline-flex rounded-full h-3 w-3 bg-destructive" />
-                  </span>
-                </>
-              ) : (
-                <Mic className="h-4 w-4" />
-              )}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            {activeListening
-              ? 'Click to stop recording'
-              : isFallbackMode
-                ? 'Voice input (Whisper)'
-                : 'Voice input'}
-          </TooltipContent>
-        </Tooltip>
 
-        {/* Interim transcript while Web Speech is listening */}
-        {interimTranscript && (
-          <span className="text-sm text-muted-foreground italic animate-pulse">
-            {interimTranscript.slice(0, 50)}...
-          </span>
-        )}
+        {/* Animation container — shows character animation idle/active */}
+        <div
+          className={cn(
+            'relative flex items-center justify-center rounded-xl transition-all duration-300',
+            activeListening
+              ? 'bg-primary/8 ring-1 ring-primary/25 px-2'
+              : 'opacity-70'
+          )}
+          style={{ width: 60, height: 40 }}
+        >
+          <VoiceAnimationDisplay character={character} isActive={activeListening} size={40} />
+        </div>
 
-        {/* Listening / transcribing indicator */}
-        {activeListening && !interimTranscript && (
-          <span className="flex items-center gap-1 text-sm text-destructive">
-            <Loader2 className="h-3 w-3 animate-spin" />
-            {isRecording && !isListening ? 'Transcribing...' : 'Listening...'}
-          </span>
-        )}
-
-        {/* HF model warm-up countdown */}
-        {isWarmingUp && (
-          <span className="flex items-center gap-1 text-sm text-muted-foreground">
-            <Loader2 className="h-3 w-3 animate-spin" />
-            Retrying in {retryCountdown}s
-          </span>
-        )}
-
-        {/* Error indicator */}
-        {currentError && !activeListening && !isWarmingUp && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="flex items-center gap-1 text-sm text-destructive cursor-help">
-                <AlertCircle className="h-3 w-3" />
+        {/* Mic toggle button */}
+        <button
+          type="button"
+          onClick={handleToggle}
+          disabled={disabled || isWarmingUp}
+          aria-label={activeListening ? 'Stop recording' : 'Start voice input'}
+          className={cn(
+            'relative flex items-center justify-center w-10 h-10 rounded-xl border transition-all duration-200',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            activeListening
+              ? 'bg-primary border-primary text-primary-foreground shadow-lg shadow-primary/25'
+              : 'bg-card border-border text-muted-foreground hover:border-primary/40 hover:text-primary',
+            (disabled || isWarmingUp) && 'opacity-50 cursor-not-allowed'
+          )}
+        >
+          {activeListening ? (
+            <>
+              {/* Recording indicator dot */}
+              <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-60" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white" />
               </span>
-            </TooltipTrigger>
-            <TooltipContent className="max-w-xs">
+              {/* Stop icon */}
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
+                <rect x="4" y="4" width="8" height="8" rx="1.5" />
+              </svg>
+            </>
+          ) : (
+            /* Mic icon */
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round"
+                d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+              <path strokeLinecap="round" strokeLinejoin="round"
+                d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" />
+            </svg>
+          )}
+        </button>
+
+        {/* Character picker trigger */}
+        <div className="relative" ref={pickerRef}>
+          <button
+            type="button"
+            onClick={() => setPickerOpen(o => !o)}
+            aria-label="Choose voice animation"
+            className={cn(
+              'flex items-center justify-center w-7 h-7 rounded-lg transition-all',
+              pickerOpen
+                ? 'bg-primary/15 text-primary'
+                : 'text-muted-foreground hover:text-primary hover:bg-muted'
+            )}
+          >
+            {/* Palette / customize icon */}
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <circle cx="12" cy="12" r="10" />
+              <circle cx="12" cy="12" r="3" />
+              <path strokeLinecap="round" d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+            </svg>
+          </button>
+
+          {/* Character picker dropdown */}
+          {pickerOpen && (
+            <div
+              className="absolute bottom-full mb-2 right-0 z-50 bg-card border border-border rounded-xl shadow-xl p-3 min-w-max"
+            >
+              <p className="text-xs text-muted-foreground font-medium mb-2 font-mono uppercase tracking-wider">
+                Voice character
+              </p>
+              <div className="flex gap-2">
+                {VOICE_CHARACTERS.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => saveCharacter(c.id)}
+                    title={c.description}
+                    className={cn(
+                      'flex flex-col items-center gap-1.5 p-2 rounded-lg transition-all border',
+                      character === c.id
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-transparent hover:border-border hover:bg-muted/50 text-muted-foreground'
+                    )}
+                  >
+                    {/* Mini live preview */}
+                    <div style={{ width: 32, height: 32 }} className="flex items-center justify-center">
+                      <VoiceAnimationDisplay character={c.id} isActive={character === c.id} size={28} />
+                    </div>
+                    <span className="text-xs font-medium leading-none">{c.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Status text */}
+        <div className="flex items-center gap-1.5 min-w-0">
+          {activeListening && !interimTranscript && (
+            <span className="text-xs text-primary font-medium">
+              {isRecording && !isListening ? 'Transcribing…' : 'Listening…'}
+            </span>
+          )}
+          {isWarmingUp && (
+            <span className="text-xs text-muted-foreground">
+              Retrying in {retryCountdown}s
+            </span>
+          )}
+          {currentError && !activeListening && !isWarmingUp && (
+            <span className="text-xs text-destructive truncate max-w-40" title={currentError}>
               {currentError}
-            </TooltipContent>
-          </Tooltip>
-        )}
+            </span>
+          )}
+        </div>
       </div>
-    </TooltipProvider>
+
+      {/* Interim transcript */}
+      {interimTranscript && (
+        <p className="text-xs text-muted-foreground italic pl-1 animate-pulse truncate max-w-xs">
+          {interimTranscript}
+        </p>
+      )}
+    </div>
   )
 }
