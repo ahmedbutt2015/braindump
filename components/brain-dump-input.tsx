@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { VoiceInputButton } from '@/components/voice-input-button'
 
 interface BrainDumpInputProps {
   onSubmit: (content: string) => Promise<void>
@@ -21,6 +22,16 @@ export function BrainDumpInput({ onSubmit, isProcessing }: BrainDumpInputProps) 
     setContent('')
   }
 
+  const handleVoiceTranscript = (transcript: string) => {
+    setContent(prev => {
+      // Add space between existing content and new transcript
+      if (prev.trim()) {
+        return `${prev} ${transcript}`
+      }
+      return transcript
+    })
+  }
+
   return (
     <Card className="border-border/50 shadow-sm">
       <CardHeader className="pb-4">
@@ -30,8 +41,9 @@ export function BrainDumpInput({ onSubmit, isProcessing }: BrainDumpInputProps) 
           </svg>
           Dump Your Thoughts
         </CardTitle>
-        <CardDescription>
-          Write anything on your mind. AI will analyze and extract actionable tasks.
+        <CardDescription className="flex items-center justify-between">
+          <span>Write or speak anything on your mind. AI will analyze and extract actionable tasks.</span>
+          <VoiceInputButton onTranscript={handleVoiceTranscript} disabled={isProcessing} />
         </CardDescription>
       </CardHeader>
       <CardContent>
