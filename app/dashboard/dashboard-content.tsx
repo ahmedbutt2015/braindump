@@ -6,10 +6,9 @@ import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { formatDistanceToNow, format } from 'date-fns'
 import { createClient } from '@/lib/supabase/client'
-import { BrainDumpInput } from '@/components/brain-dump-input'
+import { CaptureZone } from '@/components/capture-zone'
 import { TaskList, Task } from '@/components/task-list'
 import { BrainDump } from '@/components/recent-dumps'
-import { BrainMascot } from '@/components/brain-mascot'
 import { Logo } from '@/components/logo'
 
 interface DashboardContentProps {
@@ -307,43 +306,8 @@ export function DashboardContent({ initialTasks, initialDumps, userEmail }: Dash
             {/* ── Left column ── */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
 
-              {/* Daily brief card */}
-              <div style={{
-                padding: '18px 22px',
-                borderRadius: 'var(--r-lg)',
-                background: 'linear-gradient(135deg, color-mix(in oklch, var(--violet) 10%, var(--surface)) 0%, var(--surface) 65%)',
-                border: '1px solid var(--line)',
-                display: 'flex', gap: 20, alignItems: 'center',
-              }}>
-                <div style={{ flexShrink: 0 }}>
-                  <BrainMascot
-                    size={90}
-                    state={isProcessing ? 'thinking' : tasks.length === 0 ? 'idle' : 'happy'}
-                    showHalo={false}
-                  />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="t-eyebrow" style={{ marginBottom: 6 }}>
-                    {new Date().toLocaleDateString('en-US', { weekday: 'long' })} · daily brief
-                  </div>
-                  <div style={{ fontSize: 16, lineHeight: 1.5, color: 'var(--ink)' }}>
-                    {isProcessing ? (
-                      'Thinking… extracting tasks from your dump.'
-                    ) : tasks.length === 0 ? (
-                      <>No tasks yet. Dump your thoughts below — I&apos;ll sort them out.</>
-                    ) : (
-                      <>
-                        {pendingCount} task{pendingCount !== 1 ? 's' : ''} open
-                        {inProgCount > 0 ? `, ${inProgCount} in progress` : ''}.
-                        {dumps.length > 0 ? ` ${dumps.length} thought${dumps.length !== 1 ? 's' : ''} remembered.` : ''}
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Brain dump input */}
-              <BrainDumpInput onSubmit={handleDumpSubmit} isProcessing={isProcessing} />
+              {/* Capture zone — big centered character + voice/text input */}
+              <CaptureZone onSubmit={handleDumpSubmit} isProcessing={isProcessing} />
 
               {/* Stats strip */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
