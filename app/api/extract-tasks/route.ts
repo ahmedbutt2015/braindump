@@ -68,7 +68,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const hfToken = process.env.NEXT_PUBLIC_HUGGINGFACE_API_TOKEN
+    const hfToken = process.env.HUGGINGFACE_API_TOKEN
     if (!hfToken) {
       return Response.json({ error: 'AI service not configured. Set HUGGINGFACE_API_TOKEN.' }, { status: 503 })
     }
