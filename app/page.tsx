@@ -1,124 +1,253 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import { Button } from '@/components/ui/button'
+import { createClient } from '@/lib/supabase/server'
+import { BrainMascot } from '@/components/brain-mascot'
+import { BrainGlyph, Logo } from '@/components/logo'
 
 export default async function HomePage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  
-  if (user) {
-    redirect('/dashboard')
-  }
+  if (user) redirect('/dashboard')
 
   return (
-    <div className="min-h-screen flex flex-col">
-      {/* Header */}
-      <header className="border-b border-border/50 bg-card/30">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-                <svg className="w-5 h-5 text-primary-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                </svg>
-              </div>
-              <span className="text-lg font-semibold tracking-tight">BrainDump</span>
+    <div style={{ fontFamily: 'var(--body)', background: 'var(--bg)', color: 'var(--ink)', minHeight: '100svh' }}>
+
+      {/* ── Sticky nav ── */}
+      <nav style={{
+        position: 'sticky', top: 0, zIndex: 50,
+        padding: '0 48px', height: 60,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        background: 'color-mix(in oklch, var(--bg) 75%, transparent)',
+        backdropFilter: 'blur(12px)',
+        borderBottom: '1px solid var(--line)',
+      }}>
+        <Logo size="sm" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 28, fontSize: 13.5, color: 'var(--muted-foreground)' }}>
+          <span style={{ cursor: 'default' }}>How it works</span>
+          <span style={{ cursor: 'default' }}>Memory</span>
+          <span style={{ cursor: 'default' }}>Pricing</span>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <Link href="/auth/login" style={{
+            display: 'inline-flex', alignItems: 'center',
+            height: 34, padding: '0 14px', borderRadius: 'var(--r-sm)',
+            fontSize: 13, fontWeight: 500, color: 'var(--muted-foreground)',
+            textDecoration: 'none', background: 'transparent', border: '1px solid transparent',
+          }}>
+            Sign in
+          </Link>
+          <Link href="/auth/sign-up" style={{
+            display: 'inline-flex', alignItems: 'center',
+            height: 34, padding: '0 14px', borderRadius: 'var(--r-sm)',
+            fontSize: 13, fontWeight: 500, color: 'white',
+            textDecoration: 'none', background: 'var(--ink)', border: '1px solid var(--ink)',
+          }}>
+            Start dumping
+          </Link>
+        </div>
+      </nav>
+
+      {/* ── Hero ── */}
+      <section style={{ position: 'relative', padding: '72px 56px 88px', overflow: 'hidden' }}>
+        <div className="neural-bg" />
+        <div style={{
+          position: 'relative', zIndex: 1,
+          display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: 48, alignItems: 'center',
+          maxWidth: 1200, margin: '0 auto',
+        }}>
+          {/* Left: copy */}
+          <div>
+            <div className="t-eyebrow" style={{ marginBottom: 16 }}>
+              a second brain that actually reads what you put in it
             </div>
-            <div className="flex items-center gap-3">
-              <Link href="/auth/login">
-                <Button variant="ghost" size="sm">Sign in</Button>
+            <h1 className="t-h1" style={{ fontSize: 68, marginBottom: 20, lineHeight: 1.02 }}>
+              Your thoughts<br />
+              <span style={{ color: 'var(--violet)' }}>don&apos;t disappear</span> here.
+            </h1>
+            <p style={{ fontSize: 18, lineHeight: 1.6, color: 'var(--muted-foreground)', maxWidth: 500, marginBottom: 32 }}>
+              Hold to talk. Let go to think. BrainDump turns raw thoughts into linked tasks —
+              and remembers everything you mention, so new dumps enrich old ones instead of piling up.
+            </p>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+              <Link href="/auth/sign-up" style={{
+                display: 'inline-flex', alignItems: 'center', gap: 8,
+                height: 52, padding: '0 24px', borderRadius: 'var(--r-md)',
+                fontSize: 16, fontWeight: 500, color: 'white',
+                background: 'var(--violet)', textDecoration: 'none',
+                boxShadow: '0 8px 24px color-mix(in oklch, var(--violet) 35%, transparent)',
+              }}>
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <rect x="5" y="1" width="4" height="8" rx="2" fill="white" />
+                  <path d="M2 6.5a5 5 0 0010 0" stroke="white" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+                  <path d="M7 11.5v2M5 13.5h4" stroke="white" strokeWidth="1.4" strokeLinecap="round" />
+                </svg>
+                Start dumping free
               </Link>
-              <Link href="/auth/sign-up">
-                <Button size="sm">Get Started</Button>
+              <Link href="/auth/login" style={{
+                display: 'inline-flex', alignItems: 'center',
+                height: 52, padding: '0 24px', borderRadius: 'var(--r-md)',
+                fontSize: 16, fontWeight: 500, color: 'var(--ink)',
+                background: 'var(--surface)', textDecoration: 'none',
+                border: '1px solid var(--line)',
+              }}>
+                Sign in →
               </Link>
+            </div>
+            <div className="t-mono" style={{ color: 'var(--muted-foreground)', marginTop: 16 }}>
+              free · 100 dumps · no credit card
+            </div>
+          </div>
+
+          {/* Right: brain mascot + floating task bubbles */}
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            <div style={{ position: 'relative', display: 'inline-block' }}>
+              <BrainMascot size={340} state="listening" />
+
+              {/* Floating task bubbles */}
+              <div style={{
+                position: 'absolute', top: 20, right: -50,
+                padding: '8px 14px', borderRadius: 'var(--r-pill)',
+                background: 'var(--surface)', boxShadow: 'var(--shadow-3)',
+                fontSize: 12, display: 'flex', alignItems: 'center', gap: 8,
+                border: '1px solid var(--line)', whiteSpace: 'nowrap',
+                animation: 'float-slow 3.2s ease-in-out infinite',
+              }}>
+                <span className="chip dot hue-high" style={{ height: 18, fontSize: 10 }}>high</span>
+                Email Jake @ CyberX
+              </div>
+              <div style={{
+                position: 'absolute', bottom: 80, left: -60,
+                padding: '8px 14px', borderRadius: 'var(--r-pill)',
+                background: 'var(--surface)', boxShadow: 'var(--shadow-3)',
+                fontSize: 12, display: 'flex', alignItems: 'center', gap: 6,
+                border: '1px solid var(--line)', whiteSpace: 'nowrap',
+                animation: 'float-slow 2.8s ease-in-out infinite 0.6s',
+              }}>
+                <span style={{ color: 'var(--violet)' }}>↳</span> Research security roles
+              </div>
+              <div style={{
+                position: 'absolute', bottom: 10, right: 0,
+                padding: '8px 14px', borderRadius: 'var(--r-pill)',
+                background: 'var(--surface)', boxShadow: 'var(--shadow-3)',
+                fontSize: 12, display: 'flex', alignItems: 'center', gap: 8,
+                border: '1px solid var(--line)', whiteSpace: 'nowrap',
+                animation: 'float-slow 3.6s ease-in-out infinite 1.2s',
+              }}>
+                <span className="chip dot hue-done" style={{ height: 18, fontSize: 10 }}>done</span>
+                Pay Beth $32
+              </div>
             </div>
           </div>
         </div>
-      </header>
+      </section>
 
-      {/* Hero */}
-      <main className="flex-1 flex items-center justify-center px-4">
-        <div className="max-w-3xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm mb-6">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+      {/* ── Three things ── */}
+      <section style={{ padding: '0 56px 72px', maxWidth: 1200 + 112, margin: '0 auto' }}>
+        <div className="t-eyebrow" style={{ marginBottom: 20 }}>three things it does</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+          {[
+            { n: '01', t: 'Dump freely', d: 'Voice or text. No structure, no tags, no format. Just say what\'s on your mind.' },
+            { n: '02', t: 'AI extracts tasks', d: 'Priority, due dates, and context — all lifted from your words and past 11 weeks.' },
+            { n: '03', t: 'It links the dots', d: 'Mention a person or idea twice — the second dump enriches the first task automatically.' },
+          ].map(c => (
+            <div key={c.n} style={{
+              padding: 24, borderRadius: 'var(--r-lg)',
+              background: 'var(--surface)', border: '1px solid var(--line)',
+              boxShadow: 'var(--shadow-1)', minHeight: 190,
+              display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+            }}>
+              <span className="t-mono" style={{ color: 'var(--violet)' }}>{c.n}</span>
+              <div>
+                <div className="t-h3" style={{ marginBottom: 10, fontSize: 20 }}>{c.t}</div>
+                <p style={{ fontSize: 14.5, lineHeight: 1.6, color: 'var(--muted-foreground)', margin: 0 }}>{c.d}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Example dump strip ── */}
+      <section style={{ padding: '0 56px 80px', maxWidth: 1200 + 112, margin: '0 auto' }}>
+        <div style={{
+          padding: '28px 32px', borderRadius: 'var(--r-lg)',
+          background: 'var(--surface-2)', border: '1px solid var(--line)',
+          display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 28, alignItems: 'center',
+        }}>
+          <div>
+            <div className="t-eyebrow" style={{ marginBottom: 10 }}>you dump</div>
+            <div style={{ fontSize: 17, color: 'var(--ink)', lineHeight: 1.55 }}>
+              &ldquo;Met Jake at the networking event, he&apos;s a hiring manager at{' '}
+              <span style={{
+                background: 'color-mix(in oklch, var(--violet) 18%, transparent)',
+                padding: '0 4px', borderRadius: 4,
+              }}>CyberX</span>.&rdquo;
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, color: 'var(--violet)' }}>
+            <BrainGlyph size={30} filled />
+            <svg width="2" height="24" viewBox="0 0 2 24">
+              <line x1="1" y1="0" x2="1" y2="24" stroke="var(--violet)" strokeWidth="1.5" strokeDasharray="3 3" />
             </svg>
-            AI-Powered Task Extraction
-          </div>
-          
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-balance">
-            Dump your thoughts,
-            <br />
-            <span className="text-primary">let AI organize them</span>
-          </h1>
-          
-          <p className="mt-6 text-lg text-muted-foreground max-w-2xl mx-auto text-pretty">
-            BrainDump transforms your stream of consciousness into actionable tasks. 
-            Just write what&apos;s on your mind - meetings, ideas, reminders - and our AI 
-            extracts clear, prioritized tasks automatically.
-          </p>
-
-          <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link href="/auth/sign-up">
-              <Button size="lg" className="min-w-[180px]">
-                Start Free
-                <svg className="w-4 h-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
-              </Button>
-            </Link>
-            <Link href="/auth/login">
-              <Button variant="outline" size="lg" className="min-w-[180px]">
-                Sign in
-              </Button>
-            </Link>
+            <svg width="14" height="10" viewBox="0 0 14 10">
+              <path d="M7 0v8M2 4l5 5 5-5" stroke="var(--violet)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            </svg>
           </div>
 
-          {/* Features */}
-          <div className="mt-20 grid sm:grid-cols-3 gap-8 text-left">
-            <div className="p-6 rounded-xl bg-card border border-border/50">
-              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
-                <svg className="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                </svg>
-              </div>
-              <h3 className="font-semibold mb-2">Natural Input</h3>
-              <p className="text-sm text-muted-foreground">
-                Write freely without structure. Just dump your thoughts as they come.
-              </p>
+          <div>
+            <div className="t-eyebrow" style={{ marginBottom: 10 }}>braindump enriches</div>
+            <div style={{ fontSize: 15.5, color: 'var(--ink)', lineHeight: 1.6 }}>
+              <strong style={{ color: 'var(--violet)' }}>Research security job openings</strong>{' '}
+              — contact Jake from CyberX (met at networking event).
             </div>
-
-            <div className="p-6 rounded-xl bg-card border border-border/50">
-              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
-                <svg className="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              </div>
-              <h3 className="font-semibold mb-2">AI Extraction</h3>
-              <p className="text-sm text-muted-foreground">
-                Our AI understands context and extracts actionable tasks with priorities.
-              </p>
-            </div>
-
-            <div className="p-6 rounded-xl bg-card border border-border/50">
-              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
-                <svg className="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                </svg>
-              </div>
-              <h3 className="font-semibold mb-2">Memory Context</h3>
-              <p className="text-sm text-muted-foreground">
-                References past dumps to understand context and avoid duplicate tasks.
-              </p>
+            <div className="t-mono" style={{ color: 'var(--muted-foreground)', marginTop: 10 }}>
+              existing task · enriched · not duplicated
             </div>
           </div>
         </div>
-      </main>
+      </section>
 
-      {/* Footer */}
-      <footer className="py-6 text-center text-sm text-muted-foreground border-t border-border/50">
-        Built with AI SDK and Supabase
+      {/* ── CTA strip ── */}
+      <section style={{
+        margin: '0 56px 80px', padding: '48px 56px',
+        borderRadius: 'var(--r-xl)', position: 'relative', overflow: 'hidden',
+        background: 'linear-gradient(135deg, color-mix(in oklch, var(--violet) 12%, var(--surface)) 0%, var(--surface) 70%)',
+        border: '1px solid var(--line)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 40,
+      }}>
+        <div className="neural-bg" style={{ opacity: 0.5 }} />
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          <div className="t-h2" style={{ marginBottom: 10 }}>Ready to clear your head?</div>
+          <p style={{ fontSize: 16, color: 'var(--muted-foreground)', margin: 0, maxWidth: 480 }}>
+            Free to start. No credit card. Your first 100 dumps are on us.
+          </p>
+        </div>
+        <div style={{ position: 'relative', zIndex: 1, flexShrink: 0 }}>
+          <Link href="/auth/sign-up" style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            height: 52, padding: '0 28px', borderRadius: 'var(--r-md)',
+            fontSize: 16, fontWeight: 600, color: 'white',
+            background: 'var(--violet)', textDecoration: 'none',
+            boxShadow: '0 8px 24px color-mix(in oklch, var(--violet) 35%, transparent)',
+          }}>
+            Start dumping free →
+          </Link>
+        </div>
+      </section>
+
+      {/* ── Footer ── */}
+      <footer style={{
+        padding: '24px 56px', borderTop: '1px solid var(--line)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <Logo size="sm" />
+        <div style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
+          <Link href="/auth/login" style={{ fontSize: 13, color: 'var(--muted-foreground)', textDecoration: 'none' }}>Sign in</Link>
+          <Link href="/auth/sign-up" style={{ fontSize: 13, color: 'var(--muted-foreground)', textDecoration: 'none' }}>Sign up</Link>
+        </div>
+        <div className="t-mono" style={{ color: 'var(--muted-foreground)' }}>
+          MIT · Ahmed Butt
+        </div>
       </footer>
     </div>
   )

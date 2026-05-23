@@ -3,7 +3,7 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* ── Design tokens — violet accent, neutral base ────────────────────────── */
+/* ── Tailwind / shadcn color tokens ──────────────────────────────────────── */
 :root {
   --background: oklch(0.985 0.004 270);
   --foreground: oklch(0.16 0.018 270);
@@ -30,6 +30,40 @@
   --chart-4: oklch(0.72 0.10 200);
   --chart-5: oklch(0.70 0.12 155);
   --radius: 0.875rem;
+
+  /* ── Design-system aliases (non-conflicting) ─────────────────────────── */
+  --violet:       var(--primary);
+  --violet-soft:  var(--accent);
+  --violet-deep:  oklch(0.42 0.18 290);
+  --cyan:         oklch(0.55 0.015 290);
+  --cyan-soft:    oklch(0.92 0.01 290);
+  --bg:           var(--background);
+  --bg-tint:      oklch(0.97 0.008 270);
+  --surface:      var(--card);
+  --surface-2:    oklch(0.96 0.006 270);
+  --ink:          var(--foreground);
+  --ink-2:        oklch(0.30 0.02 270);
+  --faint:        oklch(0.72 0.01 270);
+  --line:         var(--border);
+  --line-strong:  oklch(0.82 0.012 270);
+  --high:         oklch(0.65 0.18 25);
+  --med:          oklch(0.78 0.14 80);
+  --low:          oklch(0.72 0.10 200);
+  --done:         oklch(0.70 0.12 155);
+  --display:      var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --body:         var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --mono:         var(--font-jetbrains-mono), ui-monospace, monospace;
+  --r-xs:   6px;
+  --r-sm:   10px;
+  --r-md:   14px;
+  --r-lg:   22px;
+  --r-xl:   32px;
+  --r-pill: 999px;
+  --shadow-1: 0 1px 2px rgba(20,18,40,.04), 0 1px 1px rgba(20,18,40,.03);
+  --shadow-2: 0 4px 14px rgba(20,18,40,.06), 0 2px 4px rgba(20,18,40,.04);
+  --shadow-3: 0 16px 40px rgba(40,30,90,.10), 0 4px 12px rgba(40,30,90,.06);
+  --glow: 0 0 0 6px color-mix(in oklch, var(--violet) 14%, transparent),
+          0 12px 40px color-mix(in oklch, var(--violet) 35%, transparent);
 }
 
 .dark {
@@ -52,6 +86,19 @@
   --border: oklch(0.27 0.018 270);
   --input: oklch(0.22 0.018 270);
   --ring: oklch(0.72 0.20 290);
+
+  /* dark design-system overrides */
+  --violet-deep:  oklch(0.85 0.20 290);
+  --bg-tint:      oklch(0.17 0.014 270);
+  --surface-2:    oklch(0.22 0.018 270);
+  --ink-2:        oklch(0.85 0.008 270);
+  --faint:        oklch(0.45 0.012 270);
+  --line-strong:  oklch(0.36 0.02 270);
+  --shadow-1: 0 1px 2px rgba(0,0,0,.4);
+  --shadow-2: 0 6px 16px rgba(0,0,0,.45);
+  --shadow-3: 0 18px 50px rgba(0,0,0,.55);
+  --glow: 0 0 0 6px color-mix(in oklch, var(--violet) 22%, transparent),
+          0 12px 50px color-mix(in oklch, var(--violet) 55%, transparent);
 }
 
 @theme inline {
@@ -98,31 +145,98 @@
   }
 }
 
+/* ── Design-system utility classes ──────────────────────────────────────── */
+
+/* Typography */
+.t-eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--muted-foreground);
+}
+.t-h1  { font-size: 56px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.02; }
+.t-h2  { font-size: 32px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; }
+.t-h3  { font-size: 22px; font-weight: 600; letter-spacing: -0.015em; line-height: 1.18; }
+.t-body  { font-size: 15px; line-height: 1.55; color: var(--muted-foreground); }
+.t-small { font-size: 13px; line-height: 1.5;  color: var(--muted-foreground); }
+.t-mono  { font-family: var(--mono); font-size: 12px; letter-spacing: 0; }
+
+/* Priority / status hue helpers */
+.hue-high { color: var(--high); }
+.hue-med  { color: var(--med);  }
+.hue-low  { color: var(--low);  }
+.hue-done { color: var(--done); }
+
+/* Chip / badge */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+.chip.dot::before {
+  content: '';
+  width: 6px; height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+/* Neural background — soft violet glow blobs in hero areas */
+.neural-bg {
+  position: absolute; inset: 0;
+  overflow: hidden; pointer-events: none; z-index: 0;
+}
+.neural-bg::before,
+.neural-bg::after {
+  content: '';
+  position: absolute;
+  width: 60%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  filter: blur(80px);
+}
+.neural-bg::before {
+  background: var(--violet);
+  top: -20%; left: -10%;
+  opacity: 0.12;
+}
+.neural-bg::after {
+  background: var(--violet);
+  bottom: -25%; right: -15%;
+  opacity: 0.07;
+}
+.dark .neural-bg::before { opacity: 0.22; }
+.dark .neural-bg::after  { opacity: 0.14; }
+
 /* ── Voice animation keyframes ──────────────────────────────────────────── */
 
-/* Neural Pulse — scrolling EEG brainwave */
 @keyframes neural-scroll {
   from { transform: translateX(0); }
   to   { transform: translateX(-50%); }
 }
-
-/* Orb — breathing glow */
 @keyframes orb-pulse {
-  0%, 100% { transform: scale(1);   opacity: 0.9; }
+  0%, 100% { transform: scale(1);    opacity: 0.9; }
   50%       { transform: scale(1.18); opacity: 1;   }
 }
 @keyframes orb-ring {
   0%   { transform: scale(1);   opacity: 0.6; }
   100% { transform: scale(2.4); opacity: 0;   }
 }
-
-/* Ripple — expanding sonar rings */
 @keyframes ripple-expand {
   0%   { transform: scale(0.3); opacity: 0.8; }
   100% { transform: scale(2.2); opacity: 0;   }
 }
-
-/* Bars — audio spectrum */
 @keyframes bar-dance-1 { 0%,100%{height:30%}  25%{height:85%}  75%{height:50%}  }
 @keyframes bar-dance-2 { 0%,100%{height:60%}  40%{height:95%}  70%{height:35%}  }
 @keyframes bar-dance-3 { 0%,100%{height:45%}  30%{height:100%} 60%{height:55%}  }
@@ -130,23 +244,22 @@
 @keyframes bar-dance-5 { 0%,100%{height:35%}  20%{height:75%}  65%{height:95%}  }
 @keyframes bar-dance-6 { 0%,100%{height:55%}  45%{height:100%} 75%{height:30%}  }
 @keyframes bar-dance-7 { 0%,100%{height:25%}  35%{height:80%}  60%{height:60%}  }
-
-/* Blob — organic morphing */
 @keyframes blob-morph {
-  0%,100% { border-radius: 60% 40% 65% 35% / 55% 60% 40% 45%; transform: rotate(0deg)   scale(1);    }
-  25%     { border-radius: 45% 55% 40% 60% / 65% 35% 65% 35%; transform: rotate(45deg)  scale(1.08); }
-  50%     { border-radius: 35% 65% 55% 45% / 40% 60% 40% 60%; transform: rotate(90deg)  scale(1);    }
-  75%     { border-radius: 65% 35% 45% 55% / 55% 45% 55% 45%; transform: rotate(135deg) scale(1.06); }
+  0%,100% { border-radius: 60% 40% 65% 35% / 55% 60% 40% 45%; transform: rotate(0deg)    scale(1);    }
+  25%     { border-radius: 45% 55% 40% 60% / 65% 35% 65% 35%; transform: rotate(45deg)   scale(1.08); }
+  50%     { border-radius: 35% 65% 55% 45% / 40% 60% 40% 60%; transform: rotate(90deg)   scale(1);    }
+  75%     { border-radius: 65% 35% 45% 55% / 55% 45% 55% 45%; transform: rotate(135deg)  scale(1.06); }
 }
-
-/* Idle breathe (used for all characters when not recording) */
 @keyframes idle-breathe {
   0%, 100% { opacity: 0.4; transform: scale(0.95); }
   50%      { opacity: 0.7; transform: scale(1.02); }
 }
-
-/* Neural idle — flat line with slow oscillation */
 @keyframes neural-idle {
   0%, 100% { opacity: 0.35; }
   50%      { opacity: 0.55; }
 }
+@keyframes float-slow {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}
+@keyframes spin-slow { to { transform: rotate(360deg); } }
