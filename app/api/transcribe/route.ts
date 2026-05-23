@@ -4,6 +4,8 @@ import { checkTranscribeRateLimit } from '@/lib/rate-limit'
 
 const HUGGINGFACE_API_URL = 'https://api-inference.huggingface.co/models/openai/whisper-large-v3'
 
+export const preferredRegion = 'iad1'
+
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID()
 
@@ -108,10 +110,24 @@ export async function POST(request: Request) {
     })
 
   } catch (error) {
+    const serializedError = serializeError(error)
+
     console.error('[transcribe] Unhandled error', {
       requestId,
-      error: serializeError(error),
+      error: serializedError,
     })
+
+    if (serializedError.cause?.code === 'ENOTFOUND') {
+      return Response.json(
+        {
+          error: 'Could not reach Hugging Face from the server. This is likely a DNS or outbound network issue.',
+          code: serializedError.cause.code,
+          hostname: serializedError.cause.hostname,
+        },
+        { status: 502 }
+      )
+    }
+
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
