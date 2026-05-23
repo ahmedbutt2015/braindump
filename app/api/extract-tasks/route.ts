@@ -225,6 +225,8 @@ export async function POST(request: Request) {
       tasksExtracted: output.tasks.length,
       enrichmentsApplied,
       summary: output.summary,
+      extractedTasks: output.tasks,
+      transcript: content,
     })
 
   } catch (error) {

@@ -43,6 +43,7 @@
   --surface-2:    oklch(0.96 0.006 270);
   --ink:          var(--foreground);
   --ink-2:        oklch(0.30 0.02 270);
+  --copy-muted:   oklch(0.55 0.015 270);
   --faint:        oklch(0.72 0.01 270);
   --line:         var(--border);
   --line-strong:  oklch(0.82 0.012 270);
@@ -92,6 +93,7 @@
   --bg-tint:      oklch(0.17 0.014 270);
   --surface-2:    oklch(0.22 0.018 270);
   --ink-2:        oklch(0.85 0.008 270);
+  --copy-muted:   oklch(0.65 0.014 270);
   --faint:        oklch(0.45 0.012 270);
   --line-strong:  oklch(0.36 0.02 270);
   --shadow-1: 0 1px 2px rgba(0,0,0,.4);
@@ -158,8 +160,8 @@
 .t-h1  { font-size: 56px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.02; }
 .t-h2  { font-size: 32px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; }
 .t-h3  { font-size: 22px; font-weight: 600; letter-spacing: -0.015em; line-height: 1.18; }
-.t-body  { font-size: 15px; line-height: 1.55; color: var(--muted-foreground); }
-.t-small { font-size: 13px; line-height: 1.5;  color: var(--muted-foreground); }
+.t-body  { font-size: 15px; line-height: 1.55; color: var(--ink-2); }
+.t-small { font-size: 13px; line-height: 1.5;  color: var(--copy-muted); }
 .t-mono  { font-family: var(--mono); font-size: 12px; letter-spacing: 0; }
 
 /* Priority / status hue helpers */
@@ -180,7 +182,7 @@
   border: 1px solid var(--line);
   font-size: 11px;
   font-weight: 500;
-  color: var(--muted-foreground);
+  color: var(--ink-2);
   letter-spacing: 0;
   white-space: nowrap;
 }
@@ -190,6 +192,73 @@
   border-radius: 999px;
   background: currentColor;
   flex-shrink: 0;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: var(--r-md);
+  font-family: var(--body);
+  font-size: 14px;
+  font-weight: 500;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  transition: transform .12s, background .15s, border-color .15s, color .15s, box-shadow .15s;
+}
+.btn:hover { transform: translateY(-1px); }
+.btn.primary {
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
+}
+.btn.violet {
+  background: var(--violet);
+  color: white;
+  border-color: var(--violet);
+  box-shadow: 0 8px 20px color-mix(in oklch, var(--violet) 30%, transparent);
+}
+.btn.ghost {
+  background: transparent;
+  border-color: transparent;
+}
+.btn.sm {
+  height: 30px;
+  padding: 0 11px;
+  font-size: 13px;
+  border-radius: var(--r-sm);
+}
+.btn.lg {
+  height: 52px;
+  padding: 0 22px;
+  font-size: 16px;
+  border-radius: var(--r-md);
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-1);
+}
+
+.avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--violet) 0%, var(--violet-deep) 100%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
 }
 
 /* Neural background — soft violet glow blobs in hero areas */
@@ -209,15 +278,15 @@
 .neural-bg::before {
   background: var(--violet);
   top: -20%; left: -10%;
-  opacity: 0.12;
+  opacity: 0.42;
 }
 .neural-bg::after {
   background: var(--violet);
   bottom: -25%; right: -15%;
-  opacity: 0.07;
+  opacity: 0.20;
 }
-.dark .neural-bg::before { opacity: 0.22; }
-.dark .neural-bg::after  { opacity: 0.14; }
+.dark .neural-bg::before { opacity: 0.42; }
+.dark .neural-bg::after  { opacity: 0.20; }
 
 /* ── Voice animation keyframes ──────────────────────────────────────────── */
 

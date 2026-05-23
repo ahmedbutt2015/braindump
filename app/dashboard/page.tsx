@@ -21,7 +21,6 @@ export default async function DashboardPage() {
       .from('brain_dumps')
       .select('*')
       .order('created_at', { ascending: false })
-      .limit(5)
   ])
 
   return (

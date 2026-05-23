@@ -1,9 +1,6 @@
 'use client'
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { format, isPast, isToday, isTomorrow } from 'date-fns'
 
 export interface Task {
   id: string
@@ -23,206 +20,227 @@ interface TaskListProps {
   isLoading?: boolean
 }
 
-const priorityColors = {
-  low: 'bg-muted text-muted-foreground',
-  medium: 'bg-accent/20 text-accent-foreground',
-  high: 'bg-destructive/20 text-destructive',
-}
+const priorityMeta = {
+  high: { color: 'var(--high)', label: 'high' },
+  medium: { color: 'var(--med)', label: 'med' },
+  low: { color: 'var(--low)', label: 'low' },
+} as const
 
-const statusLabels = {
-  pending: 'To Do',
-  in_progress: 'In Progress',
-  completed: 'Done',
+const nextStatus: Record<Task['status'], Task['status']> = {
+  pending: 'in_progress',
+  in_progress: 'completed',
+  completed: 'pending',
 }
 
 export function TaskList({ tasks, onStatusChange, onDelete, isLoading }: TaskListProps) {
   if (isLoading) {
     return (
-      <Card className="border-border/50 shadow-sm">
-        <CardContent className="pt-6">
-          <div className="flex items-center justify-center py-8">
-            <svg className="animate-spin w-6 h-6 text-primary" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="card" style={{ padding: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '28px 0' }}>
+          <svg className="animate-spin" width="22" height="22" fill="none" viewBox="0 0 24 24" style={{ color: 'var(--violet)' }}>
+            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25" />
+            <path fill="currentColor" opacity="0.75" d="M4 12a8 8 0 0 1 8-8V0C5.37 0 0 5.37 0 12h4Z" />
+          </svg>
+        </div>
+      </div>
     )
   }
 
   if (tasks.length === 0) {
     return (
-      <Card className="border-border/50 shadow-sm">
-        <CardContent className="pt-6">
-          <div className="text-center py-8">
-            <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
-              <svg className="w-6 h-6 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-              </svg>
-            </div>
-            <p className="text-muted-foreground">No tasks yet</p>
-            <p className="text-sm text-muted-foreground/70 mt-1">Dump your thoughts above to extract tasks</p>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="card" style={{ padding: 20, textAlign: 'center' }}>
+        <div style={{
+          width: 52,
+          height: 52,
+          borderRadius: 16,
+          margin: '0 auto 14px',
+          background: 'var(--surface-2)',
+          border: '1px solid var(--line)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+          <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: 'var(--violet)' }}>
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2" />
+          </svg>
+        </div>
+        <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--ink)' }}>No tasks yet</div>
+        <div className="t-small" style={{ marginTop: 4 }}>Dump your thoughts above to extract tasks.</div>
+      </div>
     )
   }
 
-  const pendingTasks = tasks.filter(t => t.status === 'pending')
-  const inProgressTasks = tasks.filter(t => t.status === 'in_progress')
-  const completedTasks = tasks.filter(t => t.status === 'completed')
+  const orderedTasks = [...tasks].sort((a, b) => {
+    const rank = { pending: 0, in_progress: 1, completed: 2 }
+    return rank[a.status] - rank[b.status]
+  })
 
   return (
-    <div className="space-y-6">
-      {pendingTasks.length > 0 && (
-        <TaskSection
-          title="To Do"
-          description={`${pendingTasks.length} task${pendingTasks.length > 1 ? 's' : ''}`}
-          tasks={pendingTasks}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {orderedTasks.map(task => (
+        <TaskRow
+          key={task.id}
+          task={task}
           onStatusChange={onStatusChange}
           onDelete={onDelete}
         />
-      )}
-      
-      {inProgressTasks.length > 0 && (
-        <TaskSection
-          title="In Progress"
-          description={`${inProgressTasks.length} task${inProgressTasks.length > 1 ? 's' : ''}`}
-          tasks={inProgressTasks}
-          onStatusChange={onStatusChange}
-          onDelete={onDelete}
-        />
-      )}
-      
-      {completedTasks.length > 0 && (
-        <TaskSection
-          title="Completed"
-          description={`${completedTasks.length} task${completedTasks.length > 1 ? 's' : ''}`}
-          tasks={completedTasks}
-          onStatusChange={onStatusChange}
-          onDelete={onDelete}
-        />
-      )}
+      ))}
     </div>
   )
 }
 
-function TaskSection({ 
-  title, 
-  description, 
-  tasks, 
-  onStatusChange, 
-  onDelete 
-}: { 
-  title: string
-  description: string
-  tasks: Task[]
-  onStatusChange: (taskId: string, status: Task['status']) => Promise<void>
-  onDelete: (taskId: string) => Promise<void>
-}) {
-  return (
-    <Card className="border-border/50 shadow-sm">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base">{title}</CardTitle>
-        <CardDescription className="text-xs">{description}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {tasks.map(task => (
-          <TaskItem 
-            key={task.id} 
-            task={task} 
-            onStatusChange={onStatusChange}
-            onDelete={onDelete}
-          />
-        ))}
-      </CardContent>
-    </Card>
-  )
-}
-
-function TaskItem({ 
-  task, 
+function TaskRow({
+  task,
   onStatusChange,
-  onDelete 
-}: { 
+  onDelete,
+}: {
   task: Task
   onStatusChange: (taskId: string, status: Task['status']) => Promise<void>
   onDelete: (taskId: string) => Promise<void>
 }) {
-  const nextStatus: Record<Task['status'], Task['status']> = {
-    pending: 'in_progress',
-    in_progress: 'completed',
-    completed: 'pending',
-  }
+  const done = task.status === 'completed'
+  const inProgress = task.status === 'in_progress'
+  const priority = priorityMeta[task.priority]
+  const dueLabel = getDueLabel(task.due_date)
+  const links = getLinkedDumpCount(task)
+  const subLine = getSubLine(task)
+  const enriched = Boolean(task.description)
 
   return (
-    <div className={cn(
-      "p-4 rounded-lg border border-border/50 bg-card/50 transition-all hover:border-border",
-      task.status === 'completed' && "opacity-60"
-    )}>
-      <div className="flex items-start gap-3">
-        <button
-          onClick={() => onStatusChange(task.id, nextStatus[task.status])}
-          className={cn(
-            "mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors",
-            task.status === 'completed' 
-              ? "bg-primary border-primary" 
-              : task.status === 'in_progress'
-              ? "border-primary"
-              : "border-muted-foreground/30 hover:border-primary/50"
-          )}
-          aria-label={`Mark as ${statusLabels[nextStatus[task.status]]}`}
-        >
-          {task.status === 'completed' && (
-            <svg className="w-3 h-3 text-primary-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-          )}
-          {task.status === 'in_progress' && (
-            <div className="w-2 h-2 rounded-full bg-primary" />
-          )}
-        </button>
-        
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <h4 className={cn(
-              "font-medium text-sm",
-              task.status === 'completed' && "line-through text-muted-foreground"
-            )}>
-              {task.title}
-            </h4>
-            <Badge variant="secondary" className={cn("text-xs flex-shrink-0", priorityColors[task.priority])}>
-              {task.priority}
-            </Badge>
-          </div>
-          
-          {task.description && (
-            <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-              {task.description}
-            </p>
-          )}
-          
-          <div className="flex items-center gap-2 mt-2">
-            {task.due_date && (
-              <span className="text-xs text-muted-foreground flex items-center gap-1">
-                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                {new Date(task.due_date).toLocaleDateString()}
-              </span>
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onDelete(task.id)}
-              className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive ml-auto"
+    <div
+      className="card"
+      style={{
+        padding: 12,
+        display: 'flex',
+        gap: 12,
+        alignItems: 'flex-start',
+        opacity: done ? 0.65 : 1,
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => onStatusChange(task.id, nextStatus[task.status])}
+        aria-label={`Mark as ${nextStatus[task.status].replace('_', ' ')}`}
+        style={{
+          width: 18,
+          height: 18,
+          borderRadius: 5,
+          border: done ? 'none' : '1.5px solid var(--line-strong)',
+          background: done ? 'var(--done)' : 'transparent',
+          marginTop: 2,
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+        }}
+      >
+        {done ? (
+          <svg width="11" height="11" viewBox="0 0 12 12">
+            <path d="M2.5 6.5 5 9l4.5-5" stroke="white" strokeWidth="2" fill="none" strokeLinecap="round" />
+          </svg>
+        ) : inProgress ? (
+          <div style={{ width: 7, height: 7, borderRadius: 999, background: 'var(--violet)' }} />
+        ) : null}
+      </button>
+
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{
+            fontSize: 14,
+            fontWeight: 500,
+            color: 'var(--ink)',
+            textDecoration: done ? 'line-through' : 'none',
+          }}>
+            {task.title}
+          </span>
+          {links > 0 && (
+            <span
+              className="chip"
+              style={{
+                background: 'color-mix(in oklch, var(--violet) 14%, transparent)',
+                borderColor: 'transparent',
+                color: 'var(--violet)',
+              }}
             >
-              Delete
-            </Button>
-          </div>
+              ↗ {links} dump{links === 1 ? '' : 's'}
+            </span>
+          )}
         </div>
+
+        <div className="t-small" style={{ marginTop: 3, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          {enriched && <span style={{ color: 'var(--violet)' }}>↳</span>}
+          <span style={{ color: enriched ? 'var(--violet)' : 'var(--copy-muted)' }}>{subLine}</span>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 8 }}>
+        {dueLabel && (
+          <span
+            className="chip"
+            style={{
+              background: dueLabel.tone === 'urgent'
+                ? 'color-mix(in oklch, var(--high) 14%, transparent)'
+                : 'var(--surface-2)',
+              borderColor: dueLabel.tone === 'urgent'
+                ? 'color-mix(in oklch, var(--high) 30%, var(--line))'
+                : 'var(--line)',
+              color: dueLabel.tone === 'urgent' ? 'var(--high)' : 'var(--ink-2)',
+            }}
+          >
+            due {dueLabel.label}
+          </span>
+        )}
+        <span className="chip dot" style={{ color: priority.color }}>
+          {priority.label}
+        </span>
+        <button
+          type="button"
+          onClick={() => onDelete(task.id)}
+          aria-label="Delete task"
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: 10,
+            border: '1px solid transparent',
+            background: 'transparent',
+            color: 'var(--copy-muted)',
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M4 4l6 6M10 4 4 10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+          </svg>
+        </button>
       </div>
     </div>
   )
+}
+
+function getLinkedDumpCount(task: Task) {
+  if (!task.description) return 0
+  const updateCount = task.description.match(/update:/gi)?.length ?? 0
+  const paragraphCount = task.description.split('\n').filter(Boolean).length
+  return Math.max(1, Math.min(4, 1 + updateCount + Math.max(0, paragraphCount - 1)))
+}
+
+function getSubLine(task: Task) {
+  if (task.description?.trim()) return task.description.trim().split('\n')[0]
+  if (task.status === 'in_progress') return 'from a recent dump · in progress'
+  if (task.brain_dump_id) return 'from a recent voice dump'
+  return `captured ${format(new Date(task.created_at), 'MMM d')}`
+}
+
+function getDueLabel(dueDate: string | null) {
+  if (!dueDate) return null
+  const date = new Date(dueDate)
+  if (Number.isNaN(date.getTime())) return null
+
+  if (isToday(date)) return { label: 'today', tone: 'urgent' as const }
+  if (isTomorrow(date)) return { label: 'tom', tone: 'normal' as const }
+  if (isPast(date)) return { label: format(date, 'EEE').toLowerCase(), tone: 'urgent' as const }
+  return { label: format(date, 'EEE').toLowerCase(), tone: 'normal' as const }
 }
