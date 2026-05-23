@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import useSWR, { mutate } from 'swr'
+import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { Header } from '@/components/header'
 import { BrainDumpInput } from '@/components/brain-dump-input'
@@ -70,14 +71,18 @@ export function DashboardContent({
         throw new Error('Failed to process brain dump')
       }
 
-      // Revalidate both tasks and dumps
+      const result = await response.json()
+      toast.success(`Extracted ${result.tasksExtracted} task${result.tasksExtracted !== 1 ? 's' : ''}`, {
+        description: result.summary,
+      })
+
       await Promise.all([
         mutate('tasks'),
         mutate('dumps')
       ])
     } catch (error) {
       console.error('Error processing brain dump:', error)
-      alert('Failed to process your thoughts. Please try again.')
+      toast.error('Failed to process your thoughts. Please try again.')
     } finally {
       setIsProcessing(false)
     }
