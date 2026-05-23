@@ -1,9 +1,12 @@
 import { createClient } from '@/lib/supabase/server'
+import { getHuggingFaceToken, maskSecret, serializeError } from '@/lib/huggingface'
 import { checkTranscribeRateLimit } from '@/lib/rate-limit'
 
 const HUGGINGFACE_API_URL = 'https://api-inference.huggingface.co/models/openai/whisper-large-v3'
 
 export async function POST(request: Request) {
+  const requestId = crypto.randomUUID()
+
   try {
     const supabase = await createClient()
     
@@ -23,7 +26,16 @@ export async function POST(request: Request) {
     }
 
     // Check for HuggingFace API token
-    const hfToken = process.env.NEXT_PUBLIC_HUGGINGFACE_API_TOKEN
+    const { token: hfToken, source: hfTokenSource } = getHuggingFaceToken()
+
+    console.info('[transcribe] Hugging Face env check', {
+      requestId,
+      hasServerToken: Boolean(process.env.HUGGINGFACE_API_TOKEN),
+      hasPublicToken: Boolean(process.env.NEXT_PUBLIC_HUGGINGFACE_API_TOKEN),
+      resolvedSource: hfTokenSource,
+      tokenPreview: maskSecret(hfToken),
+    })
+
     if (!hfToken) {
       return Response.json({ 
         error: 'Hugging Face API token not configured',
@@ -41,6 +53,15 @@ export async function POST(request: Request) {
 
     // Convert blob to array buffer
     const audioBuffer = await audioFile.arrayBuffer()
+
+    console.info('[transcribe] Sending Hugging Face request', {
+      requestId,
+      userId: user.id,
+      hfUrl: HUGGINGFACE_API_URL,
+      hfHostname: new URL(HUGGINGFACE_API_URL).hostname,
+      audioSizeBytes: audioBuffer.byteLength,
+      tokenSource: hfTokenSource,
+    })
 
     // Send to Hugging Face Whisper API
     const response = await fetch(HUGGINGFACE_API_URL, {
@@ -64,7 +85,12 @@ export async function POST(request: Request) {
         }, { status: 503 })
       }
       
-      console.error('Hugging Face API error:', errorData)
+      console.error('[transcribe] Hugging Face API error', {
+        requestId,
+        status: response.status,
+        statusText: response.statusText,
+        errorData,
+      })
       return Response.json({ 
         error: 'Transcription failed',
         details: errorData.error || 'Unknown error'
@@ -82,7 +108,10 @@ export async function POST(request: Request) {
     })
 
   } catch (error) {
-    console.error('Error in transcribe API:', error)
+    console.error('[transcribe] Unhandled error', {
+      requestId,
+      error: serializeError(error),
+    })
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

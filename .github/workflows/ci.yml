@@ -33,4 +33,4 @@ jobs:
           # Build-time env vars — set real values in GitHub repo secrets
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co' }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key' }}
-          NEXT_PUBLIC_HUGGINGFACE_API_TOKEN: ${{ secrets.NEXT_PUBLIC_HUGGINGFACE_API_TOKEN || 'placeholder-hf-token' }}
+          HUGGINGFACE_API_TOKEN: ${{ secrets.HUGGINGFACE_API_TOKEN || 'placeholder-hf-token' }}

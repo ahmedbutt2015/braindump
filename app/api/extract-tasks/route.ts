@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { getHuggingFaceToken, maskSecret, serializeError } from '@/lib/huggingface'
 import { checkDumpRateLimit } from '@/lib/rate-limit'
 import { z } from 'zod'
 
@@ -52,6 +53,8 @@ Rules:
 - If nothing is actionable, return empty tasks and enrichments arrays`
 
 export async function POST(request: Request) {
+  const requestId = crypto.randomUUID()
+
   try {
     const supabase = await createClient()
 
@@ -68,7 +71,16 @@ export async function POST(request: Request) {
       )
     }
 
-    const hfToken = process.env.HUGGINGFACE_API_TOKEN
+    const { token: hfToken, source: hfTokenSource } = getHuggingFaceToken()
+
+    console.info('[extract-tasks] Hugging Face env check', {
+      requestId,
+      hasServerToken: Boolean(process.env.HUGGINGFACE_API_TOKEN),
+      hasPublicToken: Boolean(process.env.NEXT_PUBLIC_HUGGINGFACE_API_TOKEN),
+      resolvedSource: hfTokenSource,
+      tokenPreview: maskSecret(hfToken),
+    })
+
     if (!hfToken) {
       return Response.json({ error: 'AI service not configured. Set HUGGINGFACE_API_TOKEN.' }, { status: 503 })
     }
@@ -113,6 +125,18 @@ export async function POST(request: Request) {
       'Extract new tasks and identify enrichments for existing tasks. Return as JSON.',
     ].filter(Boolean).join('\n\n')
 
+    console.info('[extract-tasks] Sending Hugging Face request', {
+      requestId,
+      userId: user.id,
+      hfUrl: HF_API_URL,
+      hfHostname: new URL(HF_API_URL).hostname,
+      model: HF_MODEL,
+      contentLength: content.length,
+      recentDumpCount: recentDumps?.length ?? 0,
+      existingTaskCount: existingTasks?.length ?? 0,
+      tokenSource: hfTokenSource,
+    })
+
     const hfResponse = await fetch(HF_API_URL, {
       method: 'POST',
       headers: {
@@ -128,6 +152,12 @@ export async function POST(request: Request) {
         max_tokens: 2000,
         temperature: 0.1,
       }),
+      signal: AbortSignal.timeout(30000), // 30 second timeout
+    }).catch(err => {
+      if (err.name === 'AbortError') {
+        throw new Error('HuggingFace API request timed out after 30 seconds')
+      }
+      throw err
     })
 
     if (!hfResponse.ok) {
@@ -141,7 +171,12 @@ export async function POST(request: Request) {
         }, { status: 503 })
       }
 
-      console.error('HuggingFace API error:', errorData)
+      console.error('[extract-tasks] Hugging Face API error', {
+        requestId,
+        status: hfResponse.status,
+        statusText: hfResponse.statusText,
+        errorData,
+      })
       return Response.json({ error: 'AI service error' }, { status: 500 })
     }
 
@@ -158,7 +193,10 @@ export async function POST(request: Request) {
     try {
       output = ExtractedTasksSchema.parse(JSON.parse(jsonStr))
     } catch {
-      console.error('Failed to parse AI output:', rawContent)
+      console.error('[extract-tasks] Failed to parse AI output', {
+        requestId,
+        rawContent,
+      })
       return Response.json({ error: 'AI returned an unexpected format. Please try again.' }, { status: 500 })
     }
 
@@ -173,7 +211,7 @@ export async function POST(request: Request) {
       .single()
 
     if (dumpError) {
-      console.error('Error saving brain dump:', dumpError)
+      console.error('[extract-tasks] Error saving brain dump', { requestId, dumpError })
       return Response.json({ error: 'Failed to save brain dump' }, { status: 500 })
     }
 
@@ -194,7 +232,7 @@ export async function POST(request: Request) {
         )
 
       if (tasksError) {
-        console.error('Error saving tasks:', tasksError)
+        console.error('[extract-tasks] Error saving tasks', { requestId, tasksError })
         return Response.json({ error: 'Failed to save tasks' }, { status: 500 })
       }
     }
@@ -230,7 +268,10 @@ export async function POST(request: Request) {
     })
 
   } catch (error) {
-    console.error('Error in extract-tasks:', error)
+    console.error('[extract-tasks] Unhandled error', {
+      requestId,
+      error: serializeError(error),
+    })
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

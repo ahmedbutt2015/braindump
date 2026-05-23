@@ -65,6 +65,9 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 HUGGINGFACE_API_TOKEN=   # required — used for both task extraction (Mistral-7B) and voice transcription (Whisper)
 ```
 
+For local development, put these in `.env.local` and restart `npm run dev`.
+Project or hosting "Settings" values do not automatically appear in a local Next.js dev server unless you pull or copy them into `.env.local`.
+
 ## Getting Started
 
 ```bash
