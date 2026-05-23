@@ -15,9 +15,41 @@ const jetbrainsMono = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'BrainDump - AI-Powered Task Extraction',
-  description: 'Dump your thoughts, let AI extract actionable tasks',
-  generator: 'v0.app',
+  title: {
+    default: 'BrainDump — AI Second Brain',
+    template: '%s | BrainDump',
+  },
+  description:
+    'Dump your thoughts freely — text or voice. AI extracts tasks, links related ideas, and builds a living picture of your commitments over time.',
+  keywords: [
+    'brain dump', 'AI task extraction', 'second brain', 'productivity',
+    'voice notes', 'task manager', 'AI assistant', 'thought organizer',
+    'Mistral', 'Hugging Face', 'Next.js',
+  ],
+  authors: [{ name: 'Ahmed Butt', url: 'https://github.com/ahmedthebutt' }],
+  creator: 'Ahmed Butt',
+  metadataBase: new URL('https://braindump.vercel.app'),
+  openGraph: {
+    type: 'website',
+    locale: 'en_US',
+    url: 'https://braindump.vercel.app',
+    siteName: 'BrainDump',
+    title: 'BrainDump — AI Second Brain',
+    description:
+      'Dump your thoughts freely — text or voice. AI extracts tasks, links related ideas, and builds a living picture of your commitments over time.',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'BrainDump — AI Second Brain',
+    description:
+      'Dump your thoughts freely — text or voice. AI extracts tasks, links related ideas, and builds a living picture of your commitments over time.',
+    creator: '@ahmedthebutt',
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true },
+  },
   icons: {
     icon: [
       { url: '/icon-light-32x32.png', media: '(prefers-color-scheme: light)' },

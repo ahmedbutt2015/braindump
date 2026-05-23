@@ -1,12 +1,36 @@
 {
-  "name": "my-project",
+  "name": "braindump",
   "version": "0.1.0",
+  "description": "AI-powered thought organizer — dump freely, AI extracts tasks and links related ideas across every dump.",
   "private": true,
+  "author": {
+    "name": "Ahmed Butt",
+    "url": "https://github.com/ahmedthebutt"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ahmedthebutt/braindump.git"
+  },
+  "homepage": "https://braindump.vercel.app",
+  "license": "MIT",
+  "keywords": [
+    "brain-dump",
+    "ai",
+    "task-extraction",
+    "second-brain",
+    "productivity",
+    "voice-notes",
+    "nextjs",
+    "supabase",
+    "huggingface",
+    "mistral"
+  ],
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@ai-sdk/react": "^3.0.192",
