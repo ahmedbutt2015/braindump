@@ -81,7 +81,10 @@ export function DashboardContent({
         return
       }
 
-      toast.success(`Extracted ${result.tasksExtracted} task${result.tasksExtracted !== 1 ? 's' : ''}`, {
+      const enrichmentNote = result.enrichmentsApplied > 0
+        ? ` · Enriched ${result.enrichmentsApplied} existing task${result.enrichmentsApplied !== 1 ? 's' : ''}`
+        : ''
+      toast.success(`Extracted ${result.tasksExtracted} task${result.tasksExtracted !== 1 ? 's' : ''}${enrichmentNote}`, {
         description: result.summary,
       })
 

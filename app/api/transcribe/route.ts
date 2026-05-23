@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { checkTranscribeRateLimit } from '@/lib/rate-limit'
 
 const HUGGINGFACE_API_URL = 'https://api-inference.huggingface.co/models/openai/whisper-large-v3'
 
@@ -11,6 +12,14 @@ export async function POST(request: Request) {
     
     if (authError || !user) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { allowed, resetInSeconds } = checkTranscribeRateLimit(user.id)
+    if (!allowed) {
+      return Response.json(
+        { error: `Rate limit reached. Try again in ${Math.ceil(resetInSeconds / 60)} minutes.` },
+        { status: 429 }
+      )
     }
 
     // Check for HuggingFace API token

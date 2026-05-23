@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { checkDumpRateLimit } from '@/lib/rate-limit'
 import { z } from 'zod'
 
 const HF_MODEL = 'mistralai/Mistral-7B-Instruct-v0.3'
@@ -11,12 +12,18 @@ const TaskSchema = z.object({
   due_date: z.string().nullable().optional(),
 })
 
+const EnrichmentSchema = z.object({
+  task_id: z.string().uuid(),
+  additional_context: z.string(),
+})
+
 const ExtractedTasksSchema = z.object({
   tasks: z.array(TaskSchema),
+  enrichments: z.array(EnrichmentSchema).optional().default([]),
   summary: z.string(),
 })
 
-const SYSTEM_PROMPT = `You are an AI assistant that extracts actionable tasks from brain dumps.
+const SYSTEM_PROMPT = `You are an AI assistant that extracts actionable tasks from brain dumps and enriches existing tasks with new context.
 Respond ONLY with a valid JSON object — no explanation, no markdown, no code blocks.
 
 Required JSON format:
@@ -25,12 +32,24 @@ Required JSON format:
     {
       "title": "clear, action-oriented task title",
       "description": "extra context or null",
-      "priority": "low" or "medium" or "high",
+      "priority": "low" | "medium" | "high",
       "due_date": "ISO date string or null"
     }
   ],
+  "enrichments": [
+    {
+      "task_id": "the exact UUID of the existing task to enrich",
+      "additional_context": "what new information from this dump should be appended to that task"
+    }
+  ],
   "summary": "one sentence describing what was processed"
-}`
+}
+
+Rules:
+- Only create a NEW task for a genuinely new action item not covered by existing tasks
+- If the dump mentions something related to an existing task, add an enrichment entry for that task instead of (or alongside) creating a new one
+- Use the exact task_id UUID from the provided list — do not guess or modify it
+- If nothing is actionable, return empty tasks and enrichments arrays`
 
 export async function POST(request: Request) {
   try {
@@ -39,6 +58,14 @@ export async function POST(request: Request) {
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { allowed, resetInSeconds } = await checkDumpRateLimit(supabase, user.id)
+    if (!allowed) {
+      return Response.json(
+        { error: `Rate limit reached. You can submit up to 20 dumps per hour. Try again in ${Math.ceil(resetInSeconds / 60)} minutes.` },
+        { status: 429 }
+      )
     }
 
     const hfToken = process.env.HUGGINGFACE_API_TOKEN
@@ -51,7 +78,7 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Content is required' }, { status: 400 })
     }
 
-    // Fetch recent dumps and existing tasks for context
+    // Fetch recent dumps + existing pending tasks (with IDs for enrichment)
     const [{ data: recentDumps }, { data: existingTasks }] = await Promise.all([
       supabase
         .from('brain_dumps')
@@ -60,25 +87,30 @@ export async function POST(request: Request) {
         .limit(5),
       supabase
         .from('tasks')
-        .select('title, status')
+        .select('id, title, description, status')
+        .eq('user_id', user.id)
         .eq('status', 'pending')
         .order('created_at', { ascending: false })
-        .limit(10),
+        .limit(15),
     ])
 
     const previousContext = recentDumps?.length
       ? `Recent brain dumps for context:\n${recentDumps.map(d => `- ${d.content.substring(0, 200)}`).join('\n')}`
       : ''
 
+    // Pass tasks with IDs so the AI can reference them in enrichments
     const existingTasksContext = existingTasks?.length
-      ? `Existing pending tasks (avoid duplicates):\n${existingTasks.map(t => `- ${t.title}`).join('\n')}`
+      ? `Existing pending tasks (with IDs for enrichment — reference these instead of creating duplicates):\n${existingTasks.map(t => {
+          const desc = t.description ? ` | Description: ${t.description.substring(0, 100)}` : ''
+          return `- ID: ${t.id} | Title: ${t.title}${desc}`
+        }).join('\n')}`
       : ''
 
     const userMessage = [
       previousContext,
       existingTasksContext,
       `Brain dump to process:\n"""\n${content}\n"""`,
-      'Extract all actionable tasks as JSON. If nothing actionable, return empty tasks array.',
+      'Extract new tasks and identify enrichments for existing tasks. Return as JSON.',
     ].filter(Boolean).join('\n\n')
 
     const hfResponse = await fetch(HF_API_URL, {
@@ -130,6 +162,9 @@ export async function POST(request: Request) {
       return Response.json({ error: 'AI returned an unexpected format. Please try again.' }, { status: 500 })
     }
 
+    // Build a set of valid task IDs belonging to this user for safe enrichment
+    const validTaskIds = new Set((existingTasks ?? []).map(t => t.id))
+
     // Save the brain dump
     const { data: brainDump, error: dumpError } = await supabase
       .from('brain_dumps')
@@ -142,7 +177,7 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Failed to save brain dump' }, { status: 500 })
     }
 
-    // Save extracted tasks
+    // Save new tasks
     if (output.tasks.length > 0) {
       const { error: tasksError } = await supabase
         .from('tasks')
@@ -164,9 +199,31 @@ export async function POST(request: Request) {
       }
     }
 
+    // Apply enrichments — append new context to existing task descriptions
+    const validEnrichments = (output.enrichments ?? []).filter(e => validTaskIds.has(e.task_id))
+    let enrichmentsApplied = 0
+
+    for (const enrichment of validEnrichments) {
+      const existing = existingTasks?.find(t => t.id === enrichment.task_id)
+      if (!existing) continue
+
+      const newDescription = existing.description
+        ? `${existing.description}\n\nUpdate: ${enrichment.additional_context}`
+        : enrichment.additional_context
+
+      const { error: enrichError } = await supabase
+        .from('tasks')
+        .update({ description: newDescription, updated_at: new Date().toISOString() })
+        .eq('id', enrichment.task_id)
+        .eq('user_id', user.id)
+
+      if (!enrichError) enrichmentsApplied++
+    }
+
     return Response.json({
       success: true,
       tasksExtracted: output.tasks.length,
+      enrichmentsApplied,
       summary: output.summary,
     })
 
