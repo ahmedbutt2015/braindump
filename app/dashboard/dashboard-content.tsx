@@ -10,7 +10,6 @@ import { CaptureZone, type CaptureSubmitResult } from '@/components/capture-zone
 import { TaskList, type Task } from '@/components/task-list'
 import type { BrainDump } from '@/components/recent-dumps'
 import { Logo } from '@/components/logo'
-import { BrainMascot } from '@/components/brain-mascot'
 import { useIsMobile } from '@/hooks/use-mobile'
 
 interface DashboardContentProps {
@@ -55,8 +54,8 @@ export function DashboardContent({ initialTasks, initialDumps, userEmail }: Dash
   const [isDark, setIsDark] = useState(false)
   const router = useRouter()
   const isMobile = useIsMobile()
+  const captureSectionRef = useRef<HTMLDivElement | null>(null)
   const taskSectionRef = useRef<HTMLDivElement | null>(null)
-  const latestDumpRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     setIsDark(document.documentElement.classList.contains('dark'))
@@ -168,485 +167,485 @@ export function DashboardContent({ initialTasks, initialDumps, userEmail }: Dash
     if (error) mutate('tasks')
   }, [])
 
-  const pendingCount = tasks.filter(task => task.status === 'pending').length
-  const inProgressCount = tasks.filter(task => task.status === 'in_progress').length
-  const completedCount = tasks.filter(task => task.status === 'completed').length
-  const linkedCount = tasks.filter(task => task.description?.trim()).length
+  const pendingTasks = tasks.filter(task => task.status === 'pending')
+  const inProgressTasks = tasks.filter(task => task.status === 'in_progress')
+  const completedTasks = tasks.filter(task => task.status === 'completed')
+  const latestDump = dumps[0]
   const initials = userEmail ? userEmail.slice(0, 1).toUpperCase() : '?'
   const userLabel = formatUserLabel(userEmail)
-  const todayLabel = format(new Date(), 'EEEE · MMM d').toUpperCase()
-  const mobileTodayLabel = format(new Date(), 'EEE · MMM d').toUpperCase()
-  const dailyBrief = buildDailyBrief(tasks, dumps)
-  const latestDump = dumps[0]
+  const todayLabel = format(new Date(), 'EEEE, MMM d')
 
   return (
     <div style={{
       display: 'flex',
       minHeight: '100dvh',
-      overflow: 'hidden',
-      background: 'var(--bg)',
-      fontFamily: 'var(--body)',
+      background: 'radial-gradient(circle at top left, color-mix(in oklch, var(--violet) 10%, transparent) 0%, transparent 30%), var(--bg)',
       color: 'var(--ink)',
+      fontFamily: 'var(--body)',
     }}>
       {!isMobile && (
-        <DesktopSidebar
-          pendingCount={pendingCount}
+        <DashboardSidebar
+          pendingCount={pendingTasks.length}
           tasksCount={tasks.length}
           dumps={dumps}
-          linkedCount={linkedCount}
           initials={initials}
           userEmail={userEmail}
+          isDark={isDark}
+          onToggleDark={toggleDark}
           onSignOut={handleSignOut}
         />
       )}
 
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        {!isMobile && <DesktopHeader todayLabel={todayLabel} isDark={isDark} onToggleDark={toggleDark} />}
+      <main style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ maxWidth: 1380, margin: '0 auto', padding: isMobile ? '18px 16px 32px' : '28px 28px 40px' }}>
+          <DashboardTopbar
+            isMobile={isMobile}
+            todayLabel={todayLabel}
+            userLabel={userLabel}
+            initials={initials}
+            isDark={isDark}
+            onToggleDark={toggleDark}
+          />
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '18px 16px 28px' : '24px 32px' }}>
+          <TutorialCard
+            onStartVoice={() => captureSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            onOpenTasks={() => taskSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+          />
+
           <div style={{
             display: 'grid',
-            gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1fr) 360px',
-            gap: isMobile ? 18 : 28,
+            gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1.2fr) 320px',
+            gap: isMobile ? 18 : 24,
             alignItems: 'start',
+            marginTop: 22,
           }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 18 : 22, minWidth: 0 }}>
-              {!isMobile && (
-                <>
-                  <DailyBriefCard
-                    text={dailyBrief}
-                    onOpenToday={() => taskSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                    onSkimMore={() => latestDumpRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                  />
-                  <StatsStrip
-                    items={[
-                      { value: pendingCount, label: 'open today', color: 'var(--violet)' },
-                      { value: inProgressCount, label: 'in progress' },
-                      { value: linkedCount, label: 'linked across dumps', color: 'var(--cyan)' },
-                      { value: dumps.length, label: 'dumps remembered' },
-                    ]}
-                  />
-                </>
-              )}
-
-              <CaptureZone
-                onSubmit={handleDumpSubmit}
-                isProcessing={isProcessing}
-                userLabel={userLabel}
-                userInitial={initials}
-                todayLabel={mobileTodayLabel}
-                dailyBrief={dailyBrief}
-              />
-
-              {isMobile && (
-                <StatsStrip
-                  compact
-                  items={[
-                    { value: pendingCount, label: 'open today', color: 'var(--violet)' },
-                    { value: inProgressCount, label: 'in progress' },
-                    { value: linkedCount, label: 'linked across dumps', color: 'var(--cyan)' },
-                    { value: dumps.length, label: 'dumps remembered' },
-                  ]}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
+              <section ref={captureSectionRef}>
+                <SectionHeading
+                  eyebrow="Taking notes"
+                  title="One place to talk, type, and let the app sort the rest."
+                  body="Start with voice when you want speed. Type when you want precision. Either way, tasks show up below without clutter."
                 />
-              )}
+                <div style={{ marginTop: 14 }}>
+                  <CaptureZone
+                    onSubmit={handleDumpSubmit}
+                    isProcessing={isProcessing}
+                    userLabel={userLabel}
+                    userInitial={initials}
+                    todayLabel={todayLabel}
+                    dailyBrief={buildCaptureHint(tasks, dumps)}
+                  />
+                </div>
+              </section>
 
-              <div ref={taskSectionRef}>
-                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12, gap: 12, flexWrap: 'wrap' }}>
-                  <h3 className="t-h3">Tasks</h3>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    <span className="chip" style={{ background: 'var(--ink)', color: 'var(--bg)', borderColor: 'var(--ink)' }}>All · {tasks.length}</span>
-                    <span className="chip">To do · {pendingCount}</span>
-                    <span className="chip">Doing · {inProgressCount}</span>
-                    <span className="chip">Done · {completedCount}</span>
+              <section ref={taskSectionRef}>
+                <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', marginBottom: 12 }}>
+                  <SectionHeading
+                    eyebrow="Tasks"
+                    title="Open today"
+                    body="A clean list of what came out of your dumps."
+                  />
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <span className="chip" style={{ background: 'var(--ink)', color: 'var(--bg)', borderColor: 'var(--ink)' }}>
+                      All · {tasks.length}
+                    </span>
+                    <span className="chip">Open · {pendingTasks.length}</span>
+                    <span className="chip">In progress · {inProgressTasks.length}</span>
+                    <span className="chip">Done · {completedTasks.length}</span>
                   </div>
                 </div>
+
                 <TaskList
                   tasks={tasks}
                   onStatusChange={handleStatusChange}
                   onDelete={handleDelete}
                   isLoading={tasksLoading}
                 />
-              </div>
+              </section>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-              <LinkedContextCard tasks={tasks} dumps={dumps} />
-              <div ref={latestDumpRef}>
-                <LatestDumpCard latestDump={latestDump} tasks={tasks} />
-              </div>
-              <MemoryCard dumps={dumps} tasks={tasks} />
-              <AccountCard
-                isMobile={isMobile}
-                isDark={isDark}
-                onToggleDark={toggleDark}
-                onSignOut={handleSignOut}
+            <aside style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <OverviewCard
+                pendingCount={pendingTasks.length}
+                inProgressCount={inProgressTasks.length}
+                completedCount={completedTasks.length}
+                dumpsCount={dumps.length}
               />
-            </div>
+              <FocusCard
+                title="Open today"
+                emptyText="No open tasks yet. Your next voice note will land here."
+                tasks={pendingTasks}
+              />
+              <FocusCard
+                title="In progress"
+                emptyText="Nothing in motion yet."
+                tasks={inProgressTasks}
+              />
+              <RecentNotesCard dumps={dumps} latestDump={latestDump} />
+              {isMobile && (
+                <MobileAccountCard
+                  isDark={isDark}
+                  onToggleDark={toggleDark}
+                  onSignOut={handleSignOut}
+                />
+              )}
+            </aside>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   )
 }
 
-function DesktopSidebar({
+function DashboardSidebar({
   pendingCount,
   tasksCount,
   dumps,
-  linkedCount,
   initials,
   userEmail,
+  isDark,
+  onToggleDark,
   onSignOut,
 }: {
   pendingCount: number
   tasksCount: number
   dumps: BrainDump[]
-  linkedCount: number
   initials: string
   userEmail?: string
+  isDark: boolean
+  onToggleDark: () => void
   onSignOut: () => Promise<void>
 }) {
   return (
     <aside style={{
-      width: 240,
+      width: 252,
       flexShrink: 0,
       borderRight: '1px solid var(--line)',
-      background: 'var(--bg-tint)',
+      background: 'color-mix(in oklch, var(--surface) 82%, var(--bg))',
+      padding: '22px 16px',
       display: 'flex',
       flexDirection: 'column',
-      padding: '18px 14px',
       gap: 18,
-      overflow: 'hidden',
     }}>
       <div style={{ padding: '0 6px' }}>
         <Logo size="sm" />
       </div>
 
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        padding: '7px 10px',
-        borderRadius: 'var(--r-sm)',
-        background: 'var(--surface)',
-        border: '1px solid var(--line)',
-      }}>
-        <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
-          <circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.5" />
-          <path d="M9.5 9.5L13 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-        </svg>
-        <span className="t-small" style={{ flex: 1 }}>Search dumps</span>
-        <span className="t-mono" style={{ color: 'var(--copy-muted)', fontSize: 10 }}>⌘K</span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <SidebarNavItem label="Taking notes" count={1} active />
+        <SidebarNavItem label="Tasks" count={tasksCount} />
+        <SidebarNavItem label="Inbox" count={pendingCount} />
+        <SidebarNavItem label="Recent notes" count={dumps.length} />
       </div>
 
-      <div>
-        <div className="t-mono" style={{ color: 'var(--copy-muted)', padding: '0 8px', marginBottom: 6 }}>VIEWS</div>
-        {[
-          { label: 'Today', count: pendingCount, active: true },
-          { label: 'Inbox', count: Math.min(dumps.length, 4), active: false },
-          { label: 'Tasks', count: tasksCount, active: false },
-          { label: 'Dumps', count: dumps.length, active: false },
-          { label: 'Linked', count: linkedCount, active: false },
-        ].map(item => (
-          <div
-            key={item.label}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              padding: '7px 10px',
-              borderRadius: 'var(--r-sm)',
-              background: item.active ? 'var(--surface)' : 'transparent',
-              border: item.active ? '1px solid var(--line)' : '1px solid transparent',
-              color: item.active ? 'var(--ink)' : 'var(--ink-2)',
-              fontSize: 13,
-              marginBottom: 2,
-              fontWeight: item.active ? 500 : 400,
-            }}
-          >
-            <span style={{ flex: 1 }}>{item.label}</span>
-            <span className="t-mono" style={{ color: 'var(--copy-muted)', fontSize: 11 }}>{item.count}</span>
-          </div>
-        ))}
+      <div className="card" style={{ padding: 14, background: 'linear-gradient(180deg, color-mix(in oklch, var(--violet) 12%, var(--surface)) 0%, var(--surface) 100%)' }}>
+        <div className="t-eyebrow">Quick flow</div>
+        <div style={{ marginTop: 8, fontSize: 14, lineHeight: 1.55, color: 'var(--ink)' }}>
+          Tap the voice circle, speak naturally, then stop to extract tasks.
+        </div>
       </div>
 
-      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-        <div className="t-mono" style={{ color: 'var(--copy-muted)', padding: '0 8px', marginBottom: 6 }}>RECENT DUMPS</div>
-        <div style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {dumps.slice(0, 4).map(dump => (
-            <div key={dump.id} style={{ display: 'flex', padding: '5px 10px', borderRadius: 'var(--r-sm)', fontSize: 12, color: 'var(--ink-2)', gap: 7 }}>
-              <span style={{ width: 4, height: 4, borderRadius: 999, background: 'var(--violet)', flexShrink: 0, marginTop: 7 }} />
-              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{dump.content}</span>
-              <span className="t-mono" style={{ color: 'var(--copy-muted)', fontSize: 10, flexShrink: 0 }}>
-                {formatDistanceToNow(new Date(dump.created_at), { addSuffix: false })
-                  .replace('about ', '')
-                  .replace(' hours', 'h')
-                  .replace(' hour', 'h')
-                  .replace(' minutes', 'm')
-                  .replace(' minute', 'm')
-                  .replace('less than a minute', 'now')}
-              </span>
+      <div style={{ minHeight: 0, display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
+        <div className="t-mono" style={{ color: 'var(--copy-muted)', fontSize: 11, padding: '0 6px' }}>RECENT NOTES</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, overflowY: 'auto' }}>
+          {dumps.slice(0, 5).map(dump => (
+            <div key={dump.id} className="card" style={{ padding: '10px 12px' }}>
+              <div style={{ fontSize: 12.5, color: 'var(--ink)', lineHeight: 1.45 }}>
+                {shorten(dump.content, 76)}
+              </div>
+              <div className="t-mono" style={{ marginTop: 6, color: 'var(--copy-muted)', fontSize: 10 }}>
+                {formatDistanceToNow(new Date(dump.created_at), { addSuffix: true }).toUpperCase()}
+              </div>
             </div>
           ))}
+          {dumps.length === 0 && (
+            <div className="card" style={{ padding: 14, fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.5 }}>
+              Your recent notes will show up here after the first capture.
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="card" style={{ marginTop: 'auto', padding: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+      <div className="card" style={{ padding: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
         <div className="avatar">{initials}</div>
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {userEmail ?? 'You'}
           </div>
-          <div className="t-mono" style={{ color: 'var(--copy-muted)', fontSize: 10 }}>free · live memory</div>
+          <div className="t-mono" style={{ color: 'var(--copy-muted)', fontSize: 10 }}>workspace</div>
         </div>
-        <button
-          type="button"
-          onClick={() => void onSignOut()}
-          title="Sign out"
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--copy-muted)', padding: 4, display: 'flex', alignItems: 'center', borderRadius: 6 }}
-        >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path d="M5 2H3a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            <path d="m9 10 3-3-3-3M12 7H6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+        <button type="button" className="btn sm" onClick={onToggleDark}>
+          {isDark ? 'Light' : 'Dark'}
+        </button>
+        <button type="button" className="btn sm ghost" onClick={() => void onSignOut()}>
+          Out
         </button>
       </div>
     </aside>
   )
 }
 
-function DesktopHeader({
+function SidebarNavItem({
+  label,
+  count,
+  active = false,
+}: {
+  label: string
+  count: number
+  active?: boolean
+}) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '10px 12px',
+        borderRadius: 'var(--r-md)',
+        border: active ? '1px solid var(--line)' : '1px solid transparent',
+        background: active ? 'var(--surface)' : 'transparent',
+        color: active ? 'var(--ink)' : 'var(--ink-2)',
+      }}
+    >
+      <span style={{ flex: 1, fontSize: 13.5, fontWeight: active ? 600 : 500 }}>{label}</span>
+      <span className="t-mono" style={{ color: 'var(--copy-muted)', fontSize: 11 }}>{count}</span>
+    </div>
+  )
+}
+
+function DashboardTopbar({
+  isMobile,
   todayLabel,
+  userLabel,
+  initials,
   isDark,
   onToggleDark,
 }: {
+  isMobile: boolean
   todayLabel: string
+  userLabel: string
+  initials: string
   isDark: boolean
   onToggleDark: () => void
 }) {
   return (
-    <div style={{
-      height: 54,
-      padding: '0 28px',
-      flexShrink: 0,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      borderBottom: '1px solid var(--line)',
-      background: 'color-mix(in oklch, var(--bg) 80%, transparent)',
-      backdropFilter: 'blur(8px)',
-    }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 18 }}>
       <div>
         <div className="t-eyebrow">{todayLabel}</div>
-        <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--ink)', lineHeight: 1.2 }}>Today</div>
+        <div style={{ fontSize: isMobile ? 28 : 34, lineHeight: 1.05, fontWeight: 700, color: 'var(--ink)', marginTop: 6 }}>
+          Taking notes
+        </div>
+        <div style={{ marginTop: 8, fontSize: 14.5, color: 'var(--ink-2)', maxWidth: 680, lineHeight: 1.55 }}>
+          Hi {userLabel}. This page is now focused on one job: capture a thought quickly and turn it into something you can act on.
+        </div>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <button type="button" className="btn sm ghost">Brief</button>
-        <button
-          type="button"
-          onClick={onToggleDark}
-          title={isDark ? 'Switch to light' : 'Switch to dark'}
-          className="btn sm"
-          style={{ width: 34, padding: 0 }}
-        >
-          {isDark ? (
-            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <circle cx="12" cy="12" r="4" />
-              <path strokeLinecap="round" d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
-            </svg>
-          ) : (
-            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z" />
-            </svg>
-          )}
-        </button>
-      </div>
+
+      {isMobile ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button type="button" className="btn sm" onClick={onToggleDark}>
+            {isDark ? 'Light' : 'Dark'}
+          </button>
+          <div className="avatar">{initials}</div>
+        </div>
+      ) : null}
     </div>
   )
 }
 
-function DailyBriefCard({
-  text,
-  onOpenToday,
-  onSkimMore,
+function TutorialCard({
+  onStartVoice,
+  onOpenTasks,
 }: {
-  text: string
-  onOpenToday: () => void
-  onSkimMore: () => void
+  onStartVoice: () => void
+  onOpenTasks: () => void
 }) {
+  const steps = [
+    { number: '01', title: 'Start voice', text: 'Tap the large voice button and speak naturally.' },
+    { number: '02', title: 'Stop to extract', text: 'When you stop, the app turns your note into tasks.' },
+    { number: '03', title: 'Manage the result', text: 'Review open today, move items to in progress, or complete them.' },
+  ]
+
   return (
-    <div style={{
-      padding: 22,
-      borderRadius: 'var(--r-lg)',
-      background: 'linear-gradient(135deg, color-mix(in oklch, var(--violet) 10%, var(--surface)) 0%, var(--surface) 65%)',
-      border: '1px solid var(--line)',
-      display: 'flex',
-      gap: 22,
-      alignItems: 'center',
-      flexWrap: 'wrap',
+    <section className="card" style={{
+      padding: '18px 18px 20px',
+      background: 'linear-gradient(135deg, color-mix(in oklch, var(--violet) 10%, var(--surface)) 0%, color-mix(in oklch, var(--cyan) 6%, var(--surface)) 100%)',
+      borderColor: 'color-mix(in oklch, var(--violet) 22%, var(--line))',
     }}>
-      <BrainMascot size={120} state="happy" showHalo={false} />
-      <div style={{ flex: 1, minWidth: 240 }}>
-        <div className="t-eyebrow">Today&apos;s brief · 9:42</div>
-        <div style={{ fontSize: 19, lineHeight: 1.45, color: 'var(--ink)', marginTop: 6 }}>{text}</div>
-        <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-          <button type="button" className="btn sm primary" onClick={onOpenToday}>Open today</button>
-          <button type="button" className="btn sm" onClick={onSkimMore}>Skim more</button>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+        <div style={{ maxWidth: 720 }}>
+          <div className="t-eyebrow">Simple tutorial</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--ink)', marginTop: 6 }}>
+            New here? Start with one quick voice note.
+          </div>
+          <div style={{ marginTop: 8, fontSize: 14.5, color: 'var(--ink-2)', lineHeight: 1.6 }}>
+            We trimmed the page down so the first action is obvious. Use voice to capture fast, then let the right side show what needs attention.
+          </div>
         </div>
+
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button type="button" className="btn primary" onClick={onStartVoice}>Start voice</button>
+          <button type="button" className="btn" onClick={onOpenTasks}>View tasks</button>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginTop: 16 }}>
+        {steps.map(step => (
+          <div key={step.number} className="card" style={{ padding: 14, background: 'color-mix(in oklch, var(--surface) 92%, transparent)' }}>
+            <div className="t-mono" style={{ color: 'var(--violet)', fontSize: 11 }}>{step.number}</div>
+            <div style={{ marginTop: 10, fontSize: 15, fontWeight: 600, color: 'var(--ink)' }}>{step.title}</div>
+            <div style={{ marginTop: 6, fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.5 }}>{step.text}</div>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function SectionHeading({
+  eyebrow,
+  title,
+  body,
+}: {
+  eyebrow: string
+  title: string
+  body: string
+}) {
+  return (
+    <div>
+      <div className="t-eyebrow">{eyebrow}</div>
+      <div style={{ fontSize: 24, lineHeight: 1.15, fontWeight: 700, color: 'var(--ink)', marginTop: 6 }}>
+        {title}
+      </div>
+      <div style={{ marginTop: 8, fontSize: 14.5, lineHeight: 1.55, color: 'var(--ink-2)' }}>
+        {body}
       </div>
     </div>
   )
 }
 
-function StatsStrip({
-  items,
-  compact = false,
+function OverviewCard({
+  pendingCount,
+  inProgressCount,
+  completedCount,
+  dumpsCount,
 }: {
-  items: Array<{ value: number; label: string; color?: string }>
-  compact?: boolean
+  pendingCount: number
+  inProgressCount: number
+  completedCount: number
+  dumpsCount: number
 }) {
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: compact ? 'repeat(2, minmax(0, 1fr))' : 'repeat(4, minmax(0, 1fr))', gap: 12 }}>
-      {items.map(item => (
-        <div key={item.label} className="card" style={{ padding: 14 }}>
-          <div className="t-h2" style={{ fontSize: compact ? 24 : 28, color: item.color || 'var(--ink)' }}>{item.value}</div>
-          <div className="t-small" style={{ marginTop: 2 }}>{item.label}</div>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function LinkedContextCard({
-  tasks,
-  dumps,
-}: {
-  tasks: Task[]
-  dumps: BrainDump[]
-}) {
-  const linkedTask = tasks.find(task => task.description?.trim())
-  const latestDump = dumps[0]
+  const items = [
+    { label: 'Open today', value: pendingCount, tone: 'var(--violet)' },
+    { label: 'In progress', value: inProgressCount, tone: 'var(--cyan)' },
+    { label: 'Completed', value: completedCount, tone: 'var(--done)' },
+    { label: 'Notes saved', value: dumpsCount, tone: 'var(--ink)' },
+  ]
 
   return (
     <div className="card" style={{ padding: 16 }}>
-      <div className="t-eyebrow">Linked context · live</div>
-      <div style={{ marginTop: 10, fontSize: 14, lineHeight: 1.5 }}>
-        {linkedTask && latestDump ? (
-          <>
-            <span style={{ color: 'var(--violet)', fontWeight: 500 }}>
-              "{shorten(latestDump.content, 44)}"
-            </span>{' '}
-            connects to <span style={{ color: 'var(--ink)' }}>{linkedTask.title}</span>.
-          </>
+      <div className="t-eyebrow">Overview</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, marginTop: 12 }}>
+        {items.map(item => (
+          <div key={item.label} style={{ padding: 12, borderRadius: 'var(--r-md)', background: 'var(--surface-2)', border: '1px solid var(--line)' }}>
+            <div style={{ fontSize: 24, fontWeight: 700, color: item.tone }}>{item.value}</div>
+            <div style={{ marginTop: 4, fontSize: 12.5, color: 'var(--ink-2)' }}>{item.label}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function FocusCard({
+  title,
+  tasks,
+  emptyText,
+}: {
+  title: string
+  tasks: Task[]
+  emptyText: string
+}) {
+  return (
+    <div className="card" style={{ padding: 16 }}>
+      <div className="t-eyebrow">{title}</div>
+      <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {tasks.length === 0 ? (
+          <div style={{ fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.5 }}>{emptyText}</div>
         ) : (
-          'Mention a person or idea twice and BrainDump will connect the new dump back to the original task.'
+          tasks.slice(0, 4).map(task => (
+            <div key={task.id} style={{ paddingBottom: 10, borderBottom: '1px dashed var(--line)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ width: 8, height: 8, borderRadius: 999, background: task.priority === 'high' ? 'var(--high)' : task.priority === 'medium' ? 'var(--med)' : 'var(--low)' }} />
+                <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ink)' }}>{task.title}</span>
+              </div>
+              <div style={{ marginTop: 4, fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.45 }}>
+                {task.description?.trim() ? shorten(task.description.trim(), 88) : task.due_date ? `Due ${format(new Date(task.due_date), 'EEE, MMM d')}` : 'Captured from a recent note'}
+              </div>
+            </div>
+          ))
         )}
       </div>
-      <LinkGraph />
-      <button type="button" className="btn sm" style={{ marginTop: 10 }}>Show graph</button>
     </div>
   )
 }
 
-function LatestDumpCard({
+function RecentNotesCard({
+  dumps,
   latestDump,
-  tasks,
 }: {
+  dumps: BrainDump[]
   latestDump?: BrainDump
-  tasks: Task[]
 }) {
-  if (!latestDump) {
-    return (
-      <div className="card" style={{ padding: 20, textAlign: 'center' }}>
-        <div className="t-eyebrow" style={{ marginBottom: 8 }}>No dumps yet</div>
-        <div style={{ fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.5 }}>Dump your first thought above. Voice or text both work.</div>
-      </div>
-    )
-  }
-
   return (
     <div className="card" style={{ padding: 16 }}>
-      <div className="t-eyebrow">Latest dump</div>
-      <div className="t-mono" style={{ color: 'var(--copy-muted)', fontSize: 11, marginTop: 4 }}>
-        {formatDistanceToNow(new Date(latestDump.created_at), { addSuffix: true }).toUpperCase()}
-      </div>
-      <div style={{ marginTop: 10, fontSize: 13.5, lineHeight: 1.55, color: 'var(--ink-2)' }}>
-        {latestDump.content}
-      </div>
-      {tasks.length > 0 && (
-        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed var(--line)' }}>
-          <div className="t-mono" style={{ color: 'var(--copy-muted)' }}>EXTRACTED</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
-            {tasks.slice(0, 3).map(task => (
-              <span key={task.id} style={{ fontSize: 13, color: 'var(--ink)' }}>→ {task.title}</span>
-            ))}
+      <div className="t-eyebrow">Recent notes</div>
+      {latestDump ? (
+        <div style={{ marginTop: 10 }}>
+          <div className="t-mono" style={{ color: 'var(--copy-muted)', fontSize: 10 }}>
+            LATEST · {formatDistanceToNow(new Date(latestDump.created_at), { addSuffix: true }).toUpperCase()}
           </div>
+          <div style={{ marginTop: 8, fontSize: 13.5, color: 'var(--ink)', lineHeight: 1.55 }}>
+            {shorten(latestDump.content, 180)}
+          </div>
+        </div>
+      ) : (
+        <div style={{ marginTop: 10, fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55 }}>
+          Your notes will appear here after the first capture.
+        </div>
+      )}
+
+      {dumps.length > 1 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14 }}>
+          {dumps.slice(1, 4).map(dump => (
+            <div key={dump.id} style={{ paddingTop: 8, borderTop: '1px dashed var(--line)' }}>
+              <div style={{ fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.45 }}>
+                {shorten(dump.content, 96)}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
   )
 }
 
-function MemoryCard({
-  dumps,
-  tasks,
-}: {
-  dumps: BrainDump[]
-  tasks: Task[]
-}) {
-  const earliestOpenTask = [...tasks]
-    .filter(task => task.status !== 'completed')
-    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())[0]
-
-  return (
-    <div className="card" style={{ padding: 16, background: 'var(--surface-2)' }}>
-      <div className="t-eyebrow">Memory</div>
-      <div style={{ marginTop: 8, fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.5 }}>
-        {dumps.length === 0 ? (
-          'No thoughts stored yet. Your brain starts empty.'
-        ) : (
-          <>
-            Your brain has held onto <strong style={{ color: 'var(--ink)' }}>{dumps.length} dump{dumps.length === 1 ? '' : 's'}</strong>.
-            {earliestOpenTask && (
-              <>
-                {' '}Earliest still-open thought: <em>"{earliestOpenTask.title}"</em>.
-              </>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function AccountCard({
-  isMobile,
+function MobileAccountCard({
   isDark,
   onToggleDark,
   onSignOut,
 }: {
-  isMobile: boolean
   isDark: boolean
   onToggleDark: () => void
   onSignOut: () => Promise<void>
 }) {
   return (
-    <div className="card" style={{ padding: 14 }}>
-      <div className="t-eyebrow" style={{ marginBottom: 10 }}>Account</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {isMobile && (
-          <button type="button" className="btn sm" onClick={onToggleDark} style={{ justifyContent: 'flex-start' }}>
-            {isDark ? 'Switch to light' : 'Switch to dark'}
-          </button>
-        )}
-        <a href="/auth/forgot-password" style={{ fontSize: 13, color: 'var(--ink-2)', textDecoration: 'none' }}>
-          <span style={{ color: 'var(--violet)' }}>→</span> Change password
-        </a>
-        <button
-          type="button"
-          className="btn sm ghost"
-          onClick={() => void onSignOut()}
-          style={{ justifyContent: 'flex-start', paddingLeft: 0 }}
-        >
+    <div className="card" style={{ padding: 16 }}>
+      <div className="t-eyebrow">Account</div>
+      <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+        <button type="button" className="btn sm" onClick={onToggleDark}>
+          {isDark ? 'Switch to light' : 'Switch to dark'}
+        </button>
+        <button type="button" className="btn sm ghost" onClick={() => void onSignOut()}>
           Sign out
         </button>
       </div>
@@ -654,60 +653,12 @@ function AccountCard({
   )
 }
 
-function LinkGraph() {
-  return (
-    <svg viewBox="0 0 280 130" style={{ width: '100%', marginTop: 10 }}>
-      <defs>
-        <radialGradient id="lg-node" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="var(--violet)" />
-          <stop offset="100%" stopColor="var(--violet-deep)" />
-        </radialGradient>
-      </defs>
-      <g stroke="var(--line-strong)" strokeWidth="1.2" fill="none">
-        <path d="M40 65 Q 90 30, 150 50" />
-        <path d="M150 50 Q 200 30, 250 60" />
-        <path d="M150 50 Q 180 90, 240 100" />
-        <path d="M40 65 Q 80 100, 130 110" />
-      </g>
-      <circle cx="150" cy="50" r="11" fill="url(#lg-node)" />
-      <text x="150" y="54" textAnchor="middle" fontSize="9" fill="white" fontFamily="var(--mono)">Link</text>
-      {[
-        [40, 65, 'Dump'],
-        [250, 60, 'Task'],
-        [240, 100, 'Context'],
-        [130, 110, 'Idea'],
-      ].map(([x, y, label]) => (
-        <g key={label as string}>
-          <circle cx={x as number} cy={y as number} r="6" fill="var(--surface)" stroke="var(--line-strong)" strokeWidth="1.2" />
-          <text x={x as number} y={(y as number) - 10} textAnchor="middle" fontSize="9" fill="var(--ink-2)" fontFamily="var(--body)">
-            {label as string}
-          </text>
-        </g>
-      ))}
-    </svg>
-  )
-}
+function buildCaptureHint(tasks: Task[], dumps: BrainDump[]) {
+  if (dumps.length === 0) return 'Start with one voice note. No transcript preview, just capture and extract.'
+  if (tasks.length === 0) return 'Talk naturally. I will turn the next note into your first tasks.'
 
-function buildDailyBrief(tasks: Task[], dumps: BrainDump[]) {
-  const dueSoon = tasks.find(task => task.due_date)
-  const linked = tasks.find(task => task.description?.trim())
-  const latestDump = dumps[0]
-
-  const parts = [
-    tasks.length > 0
-      ? `You have ${tasks.filter(task => task.status !== 'completed').length} open thing${tasks.filter(task => task.status !== 'completed').length === 1 ? '' : 's'} in motion today.`
-      : 'Fresh slate today. Nothing urgent is waiting on you yet.',
-    dueSoon?.due_date
-      ? `${dueSoon.title} is due ${format(new Date(dueSoon.due_date), 'EEE')}.`
-      : linked
-        ? `${linked.title} picked up new context from a recent dump.`
-        : 'New dumps will start linking themselves as soon as you repeat a person, project, or idea.',
-    latestDump
-      ? `Latest note: "${shorten(latestDump.content, 72)}".`
-      : 'Start with one quick voice dump and let the app sort the rest.',
-  ]
-
-  return parts.join(' ')
+  const openCount = tasks.filter(task => task.status !== 'completed').length
+  return `${openCount} open item${openCount === 1 ? '' : 's'} right now. Capture another note and I’ll sort it underneath.`
 }
 
 function formatUserLabel(userEmail?: string) {

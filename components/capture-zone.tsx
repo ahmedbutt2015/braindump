@@ -354,7 +354,6 @@ export function CaptureZone({
           <MobileRecordingOverlay
             char={char}
             mascotState={mascotState}
-            transcript={displayText}
             elapsedSeconds={elapsedSeconds}
             isPaused={isPaused}
             isProcessing={isProcessing}
@@ -386,12 +385,12 @@ export function CaptureZone({
     return (
       <div className="card" style={{ position: 'relative', overflow: 'hidden', minHeight: 560 }}>
         <div className="neural-bg" />
-        <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 28, padding: '36px 24px 32px' }}>
+        <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24, padding: '36px 24px 32px' }}>
           <div style={{ alignSelf: 'stretch', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
               <div className="t-eyebrow">{isProcessing ? 'Thinking' : isPaused ? 'Paused' : `Listening · ${formatElapsed(elapsedSeconds)}`}</div>
               <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--ink)', marginTop: 4 }}>
-                {isProcessing ? 'Sorting and linking your dump' : 'Desktop capture'}
+                {isProcessing ? 'Turning your note into tasks' : 'Voice capture'}
               </div>
             </div>
             <button type="button" className="btn sm ghost" onClick={() => setShowPicker(s => !s)}>
@@ -407,13 +406,12 @@ export function CaptureZone({
 
           <CharacterDisplay id={char} state={mascotState} size={300} />
 
-          <div style={{ textAlign: 'center', maxWidth: 560 }}>
-            <div className="t-h2" style={{ marginTop: 6, textWrap: 'pretty', fontSize: 28 }}>
-              {displayText
-                ? `"...${displayText.slice(0, 140)}${displayText.length > 140 ? '…' : ''}"`
-                : isProcessing
-                  ? 'Pulling tasks, due dates, and links from what you just said.'
-                  : 'Keep going. I’ll pull tasks and context as you talk.'}
+          <div style={{ textAlign: 'center', maxWidth: 560, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div className="t-h2" style={{ marginTop: 6, textWrap: 'pretty', fontSize: 30 }}>
+              {isProcessing ? 'Cleaning up your note and extracting the useful parts.' : 'Listening now. Speak naturally and stop when you are done.'}
+            </div>
+            <div style={{ fontSize: 14, color: 'var(--ink-2)', lineHeight: 1.55 }}>
+              We are keeping the screen clean while you talk, so your transcript stays out of the way until you choose to edit later.
             </div>
           </div>
 
@@ -464,27 +462,50 @@ export function CaptureZone({
   }
 
   return (
-    <div className="card" style={{ padding: 18 }}>
-      <div style={{ display: 'flex', gap: 18, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 18, minWidth: 0, flex: 1 }}>
-          <CharacterDisplay id={char} state={mascotState} size={118} />
-          <div style={{ minWidth: 0 }}>
-            <div className="t-eyebrow">Quick capture</div>
-            <div className="t-h3" style={{ marginTop: 6, fontSize: 22 }}>Dump it before it disappears.</div>
-            <div className="t-body" style={{ marginTop: 6, maxWidth: 560 }}>
-              Start a voice dump, switch mascots, or type a thought and let BrainDump turn it into linked tasks.
-            </div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
-              <button type="button" className="btn violet" onClick={() => beginCapture(false)}>
-                Start voice
-              </button>
-              <button type="button" className="btn" onClick={() => setShowPicker(s => !s)}>
-                Choose character
-              </button>
-            </div>
+    <div className="card" style={{ padding: 22 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 240px', gap: 24, alignItems: 'center' }}>
+        <div style={{ minWidth: 0 }}>
+          <div className="t-eyebrow">Voice first</div>
+          <div className="t-h3" style={{ marginTop: 6, fontSize: 24 }}>Tap once and start talking.</div>
+          <div className="t-body" style={{ marginTop: 8, maxWidth: 580 }}>
+            The voice flow is intentionally simple now: start listening, speak naturally, then stop to extract tasks. No live transcript clutter while you record.
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
+            <button type="button" className="btn primary" onClick={() => beginCapture(false)}>
+              Start voice
+            </button>
+            <button type="button" className="btn" onClick={() => setShowPicker(s => !s)}>
+              Change animation
+            </button>
+          </div>
+          <div className="t-mono" style={{ color: 'var(--copy-muted)', marginTop: 10 }}>
+            {dailyBrief}
           </div>
         </div>
-        <div className="t-mono" style={{ color: 'var(--copy-muted)' }}>HOLD ⌘ ␣ ANYWHERE TO DUMP</div>
+
+        <button
+          type="button"
+          onClick={() => beginCapture(false)}
+          aria-label="Start voice capture"
+          style={{
+            width: 220,
+            height: 220,
+            justifySelf: 'center',
+            borderRadius: 999,
+            border: '1px solid color-mix(in oklch, var(--violet) 24%, var(--line))',
+            background: 'radial-gradient(circle at 30% 30%, color-mix(in oklch, var(--violet) 28%, transparent) 0%, color-mix(in oklch, var(--violet) 10%, var(--surface)) 52%, var(--surface) 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 28px 60px color-mix(in oklch, var(--violet) 18%, transparent), inset 0 1px 0 rgba(255,255,255,0.08)',
+            cursor: 'pointer',
+          }}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+            <CharacterDisplay id={char} state={mascotState} size={122} />
+            <span className="t-mono" style={{ color: 'var(--violet)' }}>START VOICE</span>
+          </div>
+        </button>
       </div>
 
       {showPicker && (
@@ -493,12 +514,12 @@ export function CaptureZone({
         </div>
       )}
 
-      <form onSubmit={handleTextSubmit} style={{ marginTop: 16 }}>
+      <form onSubmit={handleTextSubmit} style={{ marginTop: 18 }}>
         <div style={{ position: 'relative' }}>
           <textarea
             value={textInput}
             onChange={(event) => setTextInput(event.target.value)}
-            placeholder="or type your thoughts here..."
+            placeholder="Or type a note here if you do not want to use voice..."
             disabled={isProcessing}
             rows={3}
             onKeyDown={(event) => {
@@ -642,8 +663,8 @@ function MobileIdleCard({
       </div>
 
       <div style={{ paddingTop: 4 }}>
-        <div className="t-eyebrow">Good morning, {userLabel}</div>
-        <div className="t-h2" style={{ fontSize: 28, marginTop: 4 }}>What&apos;s on your mind?</div>
+        <div className="t-eyebrow">Hi {userLabel}</div>
+        <div className="t-h2" style={{ fontSize: 28, marginTop: 4 }}>Start with a quick voice note.</div>
       </div>
 
       <div className="card" style={{
@@ -651,8 +672,8 @@ function MobileIdleCard({
         background: 'linear-gradient(135deg, color-mix(in oklch, var(--violet) 8%, var(--surface)) 0%, var(--surface) 70%)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span className="chip dot" style={{ color: 'var(--violet)' }}>daily brief</span>
-          <span className="t-mono" style={{ color: 'var(--copy-muted)' }}>3 things</span>
+          <span className="chip dot" style={{ color: 'var(--violet)' }}>simple flow</span>
+          <span className="t-mono" style={{ color: 'var(--copy-muted)' }}>voice first</span>
         </div>
         <div style={{ marginTop: 10, fontSize: 14, lineHeight: 1.5, color: 'var(--ink)' }}>{brief}</div>
       </div>
@@ -660,8 +681,8 @@ function MobileIdleCard({
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '10px 0 0' }}>
         <CharacterDisplay id={char} state={mascotState} size={220} />
         <div style={{ marginTop: 18, textAlign: 'center' }}>
-          <div style={{ fontSize: 18, fontWeight: 500, color: 'var(--ink)' }}>Hold to dump</div>
-          <div className="t-small" style={{ marginTop: 2 }}>I&apos;ll listen, sort, and link.</div>
+          <div style={{ fontSize: 18, fontWeight: 500, color: 'var(--ink)' }}>Tap to start listening</div>
+          <div className="t-small" style={{ marginTop: 2 }}>Speak, stop, then let the tasks appear below.</div>
         </div>
       </div>
 
@@ -688,7 +709,7 @@ function MobileIdleCard({
           </svg>
         </button>
       </div>
-      <div className="t-mono" style={{ textAlign: 'center', color: 'var(--copy-muted)' }}>HOLD · or tap to type</div>
+      <div className="t-mono" style={{ textAlign: 'center', color: 'var(--copy-muted)' }}>TAP TO TALK · or type below</div>
 
       <div style={{ display: 'flex', justifyContent: 'center', marginTop: 4 }}>
         <button type="button" className="btn sm ghost" onClick={() => setShowPicker(current => !current)}>
@@ -741,7 +762,6 @@ function MobileIdleCard({
 function MobileRecordingOverlay({
   char,
   mascotState,
-  transcript,
   elapsedSeconds,
   isPaused,
   isProcessing,
@@ -753,7 +773,6 @@ function MobileRecordingOverlay({
 }: {
   char: CharId
   mascotState: MascotState
-  transcript: string
   elapsedSeconds: number
   isPaused: boolean
   isProcessing: boolean
@@ -784,11 +803,9 @@ function MobileRecordingOverlay({
         <CharacterDisplay id={char} state={mascotState} size={260} />
         <div style={{ marginTop: 30, padding: '0 8px', textAlign: 'center' }}>
           <div style={{ fontSize: 18, color: 'var(--ink)', lineHeight: 1.45, fontWeight: 500 }}>
-            {transcript
-              ? `"${transcript.slice(0, 180)}${transcript.length > 180 ? '…' : ''}"`
-              : isProcessing
-                ? 'Sorting what you said into tasks and context...'
-                : 'I’m listening.'}
+            {isProcessing
+              ? 'Sorting what you said into tasks and context...'
+              : 'I’m listening. Speak naturally and stop when you are ready.'}
           </div>
         </div>
       </div>
@@ -909,13 +926,6 @@ function MobileResultOverlay({
       </div>
 
       <div style={{ padding: '18px 0 0', display: 'flex', flexDirection: 'column', gap: 10, flex: 1, overflowY: 'auto' }}>
-        <div className="card" style={{ padding: 12, background: 'var(--surface-2)' }}>
-          <div className="t-mono" style={{ color: 'var(--copy-muted)', marginBottom: 6 }}>TRANSCRIPT</div>
-          <div style={{ fontSize: 13.5, lineHeight: 1.5, color: 'var(--ink-2)' }}>
-            {result.transcript}
-          </div>
-        </div>
-
         {result.extractedTasks.length > 0 ? result.extractedTasks.map(task => (
           <div key={task.title} className="card" style={{ padding: 12, display: 'flex', gap: 10 }}>
             <div style={{ width: 18, height: 18, borderRadius: 5, border: '1.5px solid var(--line-strong)', flexShrink: 0, marginTop: 2 }} />
