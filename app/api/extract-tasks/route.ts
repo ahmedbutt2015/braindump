@@ -56,6 +56,7 @@ Rules:
 
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID()
+  const startTime = Date.now()
 
   try {
     const supabase = await createClient()
@@ -259,6 +260,18 @@ export async function POST(request: Request) {
 
       if (!enrichError) enrichmentsApplied++
     }
+
+    void supabase.from('api_logs').insert({
+      user_id: user.id,
+      brain_dump_id: brainDump.id,
+      endpoint: 'extract-tasks',
+      model: HF_MODEL,
+      content_length: content.length,
+      tasks_extracted: output.tasks.length,
+      enrichments_applied: enrichmentsApplied,
+      duration_ms: Date.now() - startTime,
+      success: true,
+    })
 
     return Response.json({
       success: true,

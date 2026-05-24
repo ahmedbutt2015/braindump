@@ -332,3 +332,11 @@
   50%      { transform: translateY(-6px); }
 }
 @keyframes spin-slow { to { transform: rotate(360deg); } }
+@keyframes slide-in-right {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+@keyframes bd-shimmer {
+  0%   { transform: translateX(-150%); }
+  100% { transform: translateX(250%); }
+}

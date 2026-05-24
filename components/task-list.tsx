@@ -2,6 +2,13 @@
 
 import { format, isPast, isToday, isTomorrow } from 'date-fns'
 
+export interface Subtask {
+  id: string
+  title: string
+  completed: boolean
+  created_at: string
+}
+
 export interface Task {
   id: string
   title: string
@@ -11,12 +18,19 @@ export interface Task {
   due_date: string | null
   created_at: string
   brain_dump_id: string | null
+  // Extended fields (optional until migration is run)
+  subtasks?: Subtask[]
+  notes?: string | null
+  schedule_type?: 'none' | 'once' | 'daily' | 'weekly'
+  scheduled_date?: string | null
+  tags?: string[]
 }
 
 interface TaskListProps {
   tasks: Task[]
   onStatusChange: (taskId: string, status: Task['status']) => Promise<void>
   onDelete: (taskId: string) => Promise<void>
+  onOpen?: (task: Task) => void
   isLoading?: boolean
 }
 
@@ -32,7 +46,7 @@ const nextStatus: Record<Task['status'], Task['status']> = {
   completed: 'pending',
 }
 
-export function TaskList({ tasks, onStatusChange, onDelete, isLoading }: TaskListProps) {
+export function TaskList({ tasks, onStatusChange, onDelete, onOpen, isLoading }: TaskListProps) {
   if (isLoading) {
     return (
       <div className="card" style={{ padding: 20 }}>
@@ -83,6 +97,7 @@ export function TaskList({ tasks, onStatusChange, onDelete, isLoading }: TaskLis
           task={task}
           onStatusChange={onStatusChange}
           onDelete={onDelete}
+          onOpen={onOpen}
         />
       ))}
     </div>
@@ -93,10 +108,12 @@ function TaskRow({
   task,
   onStatusChange,
   onDelete,
+  onOpen,
 }: {
   task: Task
   onStatusChange: (taskId: string, status: Task['status']) => Promise<void>
   onDelete: (taskId: string) => Promise<void>
+  onOpen?: (task: Task) => void
 }) {
   const done = task.status === 'completed'
   const inProgress = task.status === 'in_progress'
@@ -194,6 +211,29 @@ function TaskRow({
         <span className="chip dot" style={{ color: priority.color }}>
           {priority.label}
         </span>
+        {onOpen && (
+          <button
+            type="button"
+            onClick={() => onOpen(task)}
+            aria-label="Open task detail"
+            title="Open detail"
+            style={{
+              width: 28, height: 28,
+              borderRadius: 10,
+              border: '1px solid transparent',
+              background: 'transparent',
+              color: 'var(--copy-muted)',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 3h6v6M11 3 4 10" />
+            </svg>
+          </button>
+        )}
         <button
           type="button"
           onClick={() => onDelete(task.id)}

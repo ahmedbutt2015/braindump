@@ -8,9 +8,19 @@ import { formatDistanceToNow, format } from 'date-fns'
 import { createClient } from '@/lib/supabase/client'
 import { CaptureZone, type CaptureSubmitResult } from '@/components/capture-zone'
 import { TaskList, type Task } from '@/components/task-list'
+import { TaskDetailPanel } from '@/components/task-detail-panel'
 import type { BrainDump } from '@/components/recent-dumps'
 import { Logo } from '@/components/logo'
 import { useIsMobile } from '@/hooks/use-mobile'
+
+type DashboardView = 'capture' | 'tasks' | 'inbox' | 'notes'
+
+const VIEW_TITLES: Record<DashboardView, string> = {
+  capture: 'Taking notes',
+  tasks: 'All tasks',
+  inbox: 'Inbox',
+  notes: 'Recent notes',
+}
 
 interface DashboardContentProps {
   initialTasks: Task[]
@@ -53,6 +63,8 @@ export function DashboardContent({ initialTasks, initialDumps, userEmail }: Dash
   const [isProcessing, setIsProcessing] = useState(false)
   const [isDark, setIsDark] = useState(false)
   const [tutorialDismissed, setTutorialDismissed] = useState(false)
+  const [activeView, setActiveView] = useState<DashboardView>('capture')
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const router = useRouter()
   const isMobile = useIsMobile()
   const captureSectionRef = useRef<HTMLDivElement | null>(null)
@@ -204,6 +216,8 @@ export function DashboardContent({ initialTasks, initialDumps, userEmail }: Dash
           isDark={isDark}
           onToggleDark={toggleDark}
           onSignOut={handleSignOut}
+          activeView={activeView}
+          onNavigate={setActiveView}
         />
       )}
 
@@ -216,97 +230,133 @@ export function DashboardContent({ initialTasks, initialDumps, userEmail }: Dash
             initials={initials}
             isDark={isDark}
             onToggleDark={toggleDark}
+            title={VIEW_TITLES[activeView]}
           />
 
-          {!tutorialDismissed && (
-            <TutorialCard
-              onStartVoice={() => captureSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-              onOpenTasks={() => taskSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-              onDismiss={handleDismissTutorial}
+          {activeView === 'capture' && (
+            <>
+              {!tutorialDismissed && (
+                <TutorialCard
+                  onStartVoice={() => captureSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                  onOpenTasks={() => taskSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                  onDismiss={handleDismissTutorial}
+                />
+              )}
+
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1.2fr) 320px',
+                gap: isMobile ? 18 : 24,
+                alignItems: 'start',
+                marginTop: 22,
+              }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
+                  <section ref={captureSectionRef}>
+                    <SectionHeading
+                      eyebrow="Taking notes"
+                      title="One place to talk, type, and let the app sort the rest."
+                      body="Start with voice when you want speed. Type when you want precision. Either way, tasks show up below without clutter."
+                    />
+                    <div style={{ marginTop: 14 }}>
+                      <CaptureZone
+                        onSubmit={handleDumpSubmit}
+                        isProcessing={isProcessing}
+                        userLabel={userLabel}
+                        userInitial={initials}
+                        todayLabel={todayLabel}
+                        dailyBrief={buildCaptureHint(tasks, dumps)}
+                      />
+                    </div>
+                  </section>
+
+                  <section ref={taskSectionRef}>
+                    <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', marginBottom: 12 }}>
+                      <SectionHeading
+                        eyebrow="Tasks"
+                        title="Open today"
+                        body="A clean list of what came out of your dumps."
+                      />
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <span className="chip" style={{ background: 'var(--ink)', color: 'var(--bg)', borderColor: 'var(--ink)' }}>
+                          All · {tasks.length}
+                        </span>
+                        <span className="chip">Open · {pendingTasks.length}</span>
+                        <span className="chip">In progress · {inProgressTasks.length}</span>
+                        <span className="chip">Done · {completedTasks.length}</span>
+                      </div>
+                    </div>
+                    <TaskList
+                      tasks={tasks}
+                      onStatusChange={handleStatusChange}
+                      onDelete={handleDelete}
+                      onOpen={setSelectedTask}
+                      isLoading={tasksLoading}
+                    />
+                  </section>
+                </div>
+
+                <aside style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <OverviewCard
+                    pendingCount={pendingTasks.length}
+                    inProgressCount={inProgressTasks.length}
+                    completedCount={completedTasks.length}
+                    dumpsCount={dumps.length}
+                  />
+                  <FocusCard
+                    title="Open today"
+                    emptyText="No open tasks yet. Your next voice note will land here."
+                    tasks={pendingTasks}
+                  />
+                  <FocusCard
+                    title="In progress"
+                    emptyText="Nothing in motion yet."
+                    tasks={inProgressTasks}
+                  />
+                  <RecentNotesCard dumps={dumps} latestDump={latestDump} />
+                  {isMobile && (
+                    <MobileAccountCard
+                      isDark={isDark}
+                      onToggleDark={toggleDark}
+                      onSignOut={handleSignOut}
+                    />
+                  )}
+                </aside>
+              </div>
+            </>
+          )}
+
+          {activeView === 'tasks' && (
+            <TasksPageView
+              tasks={tasks}
+              pendingTasks={pendingTasks}
+              inProgressTasks={inProgressTasks}
+              completedTasks={completedTasks}
+              onStatusChange={handleStatusChange}
+              onDelete={handleDelete}
+              onOpen={setSelectedTask}
+              isLoading={tasksLoading}
             />
           )}
 
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1.2fr) 320px',
-            gap: isMobile ? 18 : 24,
-            alignItems: 'start',
-            marginTop: 22,
-          }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
-              <section ref={captureSectionRef}>
-                <SectionHeading
-                  eyebrow="Taking notes"
-                  title="One place to talk, type, and let the app sort the rest."
-                  body="Start with voice when you want speed. Type when you want precision. Either way, tasks show up below without clutter."
-                />
-                <div style={{ marginTop: 14 }}>
-                  <CaptureZone
-                    onSubmit={handleDumpSubmit}
-                    isProcessing={isProcessing}
-                    userLabel={userLabel}
-                    userInitial={initials}
-                    todayLabel={todayLabel}
-                    dailyBrief={buildCaptureHint(tasks, dumps)}
-                  />
-                </div>
-              </section>
+          {activeView === 'inbox' && (
+            <InboxPageView
+              tasks={pendingTasks}
+              onStatusChange={handleStatusChange}
+              onDelete={handleDelete}
+            />
+          )}
 
-              <section ref={taskSectionRef}>
-                <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', marginBottom: 12 }}>
-                  <SectionHeading
-                    eyebrow="Tasks"
-                    title="Open today"
-                    body="A clean list of what came out of your dumps."
-                  />
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    <span className="chip" style={{ background: 'var(--ink)', color: 'var(--bg)', borderColor: 'var(--ink)' }}>
-                      All · {tasks.length}
-                    </span>
-                    <span className="chip">Open · {pendingTasks.length}</span>
-                    <span className="chip">In progress · {inProgressTasks.length}</span>
-                    <span className="chip">Done · {completedTasks.length}</span>
-                  </div>
-                </div>
-
-                <TaskList
-                  tasks={tasks}
-                  onStatusChange={handleStatusChange}
-                  onDelete={handleDelete}
-                  isLoading={tasksLoading}
-                />
-              </section>
-            </div>
-
-            <aside style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <OverviewCard
-                pendingCount={pendingTasks.length}
-                inProgressCount={inProgressTasks.length}
-                completedCount={completedTasks.length}
-                dumpsCount={dumps.length}
-              />
-              <FocusCard
-                title="Open today"
-                emptyText="No open tasks yet. Your next voice note will land here."
-                tasks={pendingTasks}
-              />
-              <FocusCard
-                title="In progress"
-                emptyText="Nothing in motion yet."
-                tasks={inProgressTasks}
-              />
-              <RecentNotesCard dumps={dumps} latestDump={latestDump} />
-              {isMobile && (
-                <MobileAccountCard
-                  isDark={isDark}
-                  onToggleDark={toggleDark}
-                  onSignOut={handleSignOut}
-                />
-              )}
-            </aside>
-          </div>
+          {activeView === 'notes' && (
+            <NotesPageView dumps={dumps} />
+          )}
         </div>
       </main>
+
+      <TaskDetailPanel
+        task={selectedTask}
+        onClose={() => setSelectedTask(null)}
+        onDelete={handleDelete}
+      />
     </div>
   )
 }
@@ -320,6 +370,8 @@ function DashboardSidebar({
   isDark,
   onToggleDark,
   onSignOut,
+  activeView,
+  onNavigate,
 }: {
   pendingCount: number
   tasksCount: number
@@ -329,6 +381,8 @@ function DashboardSidebar({
   isDark: boolean
   onToggleDark: () => void
   onSignOut: () => Promise<void>
+  activeView: DashboardView
+  onNavigate: (view: DashboardView) => void
 }) {
   return (
     <aside style={{
@@ -341,15 +395,21 @@ function DashboardSidebar({
       flexDirection: 'column',
       gap: 18,
     }}>
-      <div style={{ padding: '0 6px' }}>
+      <div
+        style={{ padding: '0 6px', cursor: 'pointer' }}
+        onClick={() => onNavigate('capture')}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter') onNavigate('capture') }}
+      >
         <Logo size="sm" />
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <SidebarNavItem label="Taking notes" count={1} active />
-        <SidebarNavItem label="Tasks" count={tasksCount} />
-        <SidebarNavItem label="Inbox" count={pendingCount} />
-        <SidebarNavItem label="Recent notes" count={dumps.length} />
+        <SidebarNavItem label="Taking notes" count={1} active={activeView === 'capture'} onClick={() => onNavigate('capture')} />
+        <SidebarNavItem label="Tasks" count={tasksCount} active={activeView === 'tasks'} onClick={() => onNavigate('tasks')} />
+        <SidebarNavItem label="Inbox" count={pendingCount} active={activeView === 'inbox'} onClick={() => onNavigate('inbox')} />
+        <SidebarNavItem label="Recent notes" count={dumps.length} active={activeView === 'notes'} onClick={() => onNavigate('notes')} />
       </div>
 
       <div className="card" style={{ padding: 14, background: 'linear-gradient(180deg, color-mix(in oklch, var(--violet) 12%, var(--surface)) 0%, var(--surface) 100%)' }}>
@@ -420,13 +480,19 @@ function SidebarNavItem({
   label,
   count,
   active = false,
+  onClick,
 }: {
   label: string
   count: number
   active?: boolean
+  onClick?: () => void
 }) {
   return (
     <div
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => { if (e.key === 'Enter') onClick?.() }}
       style={{
         display: 'flex',
         alignItems: 'center',
@@ -436,6 +502,8 @@ function SidebarNavItem({
         border: active ? '1px solid var(--line)' : '1px solid transparent',
         background: active ? 'var(--surface)' : 'transparent',
         color: active ? 'var(--ink)' : 'var(--ink-2)',
+        cursor: 'pointer',
+        transition: 'background 0.1s, color 0.1s',
       }}
     >
       <span style={{ flex: 1, fontSize: 13.5, fontWeight: active ? 600 : 500 }}>{label}</span>
@@ -451,6 +519,7 @@ function DashboardTopbar({
   initials,
   isDark,
   onToggleDark,
+  title,
 }: {
   isMobile: boolean
   todayLabel: string
@@ -458,13 +527,14 @@ function DashboardTopbar({
   initials: string
   isDark: boolean
   onToggleDark: () => void
+  title: string
 }) {
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 18 }}>
       <div>
         <div className="t-eyebrow">{todayLabel}</div>
         <div style={{ fontSize: isMobile ? 24 : 30, lineHeight: 1.05, fontWeight: 700, color: 'var(--ink)', marginTop: 6 }}>
-          Taking notes
+          {title}
         </div>
         <div style={{ marginTop: 6, fontSize: 14, color: 'var(--ink-2)', maxWidth: 580, lineHeight: 1.5 }}>
           Hi {userLabel}. Capture a thought quickly and turn it into something you can act on.
@@ -730,6 +800,160 @@ function MobileAccountCard({
       <button type="button" className="btn sm ghost" onClick={() => void onSignOut()}>
         Sign out
       </button>
+    </div>
+  )
+}
+
+function TasksPageView({
+  tasks,
+  pendingTasks,
+  inProgressTasks,
+  completedTasks,
+  onStatusChange,
+  onDelete,
+  onOpen,
+  isLoading,
+}: {
+  tasks: Task[]
+  pendingTasks: Task[]
+  inProgressTasks: Task[]
+  completedTasks: Task[]
+  onStatusChange: (id: string, status: Task['status']) => Promise<void>
+  onDelete: (id: string) => Promise<void>
+  onOpen: (task: Task) => void
+  isLoading: boolean
+}) {
+  return (
+    <div style={{ marginTop: 22 }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+        <span className="chip" style={{ background: 'var(--ink)', color: 'var(--bg)', borderColor: 'var(--ink)' }}>
+          All · {tasks.length}
+        </span>
+        <span className="chip">Open · {pendingTasks.length}</span>
+        <span className="chip">In progress · {inProgressTasks.length}</span>
+        <span className="chip">Done · {completedTasks.length}</span>
+      </div>
+      <TaskList
+        tasks={tasks}
+        onStatusChange={onStatusChange}
+        onDelete={onDelete}
+        onOpen={onOpen}
+        isLoading={isLoading}
+      />
+    </div>
+  )
+}
+
+function InboxPageView({
+  tasks,
+  onStatusChange,
+  onDelete,
+}: {
+  tasks: Task[]
+  onStatusChange: (id: string, status: Task['status']) => Promise<void>
+  onDelete: (id: string) => Promise<void>
+}) {
+  if (tasks.length === 0) {
+    return (
+      <div style={{ marginTop: 22 }}>
+        <div className="card" style={{ padding: '36px 28px', textAlign: 'center' }}>
+          <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--ink)' }}>Inbox is clear</div>
+          <div style={{ marginTop: 8, fontSize: 14, color: 'var(--ink-2)', lineHeight: 1.5 }}>
+            All pending tasks done. Capture a new note to get more.
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ marginTop: 22, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {tasks.map(task => (
+        <div key={task.id} className="card" style={{ padding: '14px 16px', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+          <span style={{
+            marginTop: 3,
+            width: 9,
+            height: 9,
+            borderRadius: 999,
+            background: task.priority === 'high' ? 'var(--high)' : task.priority === 'medium' ? 'var(--med)' : 'var(--low)',
+            flexShrink: 0,
+          }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>{task.title}</div>
+            {task.description && (
+              <div style={{ marginTop: 3, fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.45 }}>{task.description}</div>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            <button type="button" className="btn sm" onClick={() => void onStatusChange(task.id, 'in_progress')}>
+              Start →
+            </button>
+            <button type="button" className="btn sm" style={{ background: 'var(--done)', color: 'white', borderColor: 'var(--done)' }} onClick={() => void onStatusChange(task.id, 'completed')}>
+              Done
+            </button>
+            <button type="button" className="btn sm ghost" onClick={() => void onDelete(task.id)}>
+              ×
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function NotesPageView({ dumps }: { dumps: BrainDump[] }) {
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+
+  if (dumps.length === 0) {
+    return (
+      <div style={{ marginTop: 22 }}>
+        <div className="card" style={{ padding: '36px 28px', textAlign: 'center' }}>
+          <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--ink)' }}>No notes yet</div>
+          <div style={{ marginTop: 8, fontSize: 14, color: 'var(--ink-2)', lineHeight: 1.5 }}>
+            Capture your first thought to see it here.
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ marginTop: 22, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {dumps.map(dump => {
+        const isExpanded = expandedId === dump.id
+        return (
+          <div
+            key={dump.id}
+            className="card"
+            style={{ padding: '14px 16px', cursor: 'pointer', transition: 'background 0.1s' }}
+            onClick={() => setExpandedId(isExpanded ? null : dump.id)}
+          >
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="t-mono" style={{ color: 'var(--copy-muted)', fontSize: 10, marginBottom: 6 }}>
+                  {format(new Date(dump.created_at), 'EEE, MMM d · h:mm a').toUpperCase()}
+                </div>
+                <div style={{ fontSize: 13.5, color: 'var(--ink)', lineHeight: 1.55, whiteSpace: isExpanded ? 'pre-wrap' : 'normal', wordBreak: 'break-word' }}>
+                  {isExpanded ? dump.content : shorten(dump.content, 160)}
+                </div>
+              </div>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 14 14"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.8}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{ flexShrink: 0, color: 'var(--ink-2)', transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s', marginTop: 2 }}
+              >
+                <path d="M5 3l4 4-4 4" />
+              </svg>
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }

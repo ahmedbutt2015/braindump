@@ -77,6 +77,7 @@ export function CaptureZone({
   const [isHappy, setIsHappy] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  const [processingElapsed, setProcessingElapsed] = useState(0)
   const [mobileStage, setMobileStage] = useState<'idle' | 'recording' | 'result'>('idle')
   const [lastResult, setLastResult] = useState<CaptureSubmitResult | null>(null)
 
@@ -87,6 +88,7 @@ export function CaptureZone({
   const happyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const prevProcessingRef = useRef(false)
   const startTimeRef = useRef<number | null>(null)
+  const transcriptScrollRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     try {
@@ -143,6 +145,24 @@ export function CaptureZone({
 
   const activeRecording = isListening || isFallbackRecording
   const displayText = [liveTranscript, interimTranscript].filter(Boolean).join(' ').trim()
+
+  useEffect(() => {
+    if (transcriptScrollRef.current) {
+      transcriptScrollRef.current.scrollTop = transcriptScrollRef.current.scrollHeight
+    }
+  }, [liveTranscript, interimTranscript])
+
+  useEffect(() => {
+    if (!isProcessing) {
+      setProcessingElapsed(0)
+      return
+    }
+    const start = Date.now()
+    const timer = window.setInterval(() => {
+      setProcessingElapsed(Math.floor((Date.now() - start) / 1000))
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [isProcessing])
 
   useEffect(() => {
     if (!activeRecording) {
@@ -319,6 +339,17 @@ export function CaptureZone({
     await doSubmit(text)
   }
 
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === 'd' && e.metaKey && e.shiftKey && !activeRecording && !isProcessing && !isPaused) {
+        e.preventDefault()
+        beginCapture(false)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [activeRecording, isProcessing, isPaused, beginCapture])
+
   const mascotState: MascotState = isProcessing
     ? 'thinking'
     : isHappy
@@ -385,74 +416,112 @@ export function CaptureZone({
     return (
       <div className="card" style={{ position: 'relative', overflow: 'hidden' }}>
         <div className="neural-bg" />
+
+        {/* Shimmer loading bar — only visible while AI is processing */}
+        {isProcessing && (
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'color-mix(in oklch, var(--violet) 18%, var(--surface))', overflow: 'hidden' }}>
+            <div style={{
+              position: 'absolute', inset: 0,
+              background: 'linear-gradient(90deg, transparent 0%, var(--violet) 50%, transparent 100%)',
+              animation: 'bd-shimmer 1.6s ease-in-out infinite',
+            }} />
+          </div>
+        )}
+
         <div style={{ position: 'relative', zIndex: 1, padding: '22px 24px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 192px', gap: 28, alignItems: 'center' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
                 <div>
-                  <div className="t-eyebrow">
-                    {isProcessing ? 'Thinking' : isPaused ? 'Paused' : `Listening · ${formatElapsed(elapsedSeconds)}`}
+                  <div className="t-eyebrow" style={{ color: isProcessing ? 'var(--violet)' : undefined }}>
+                    {isProcessing
+                      ? `Extracting · ${processingElapsed}s`
+                      : isPaused ? 'Paused' : `Listening · ${formatElapsed(elapsedSeconds)}`}
                   </div>
                   <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--ink)', marginTop: 4 }}>
-                    {isProcessing ? 'Turning your note into tasks' : 'Voice capture active'}
+                    {isProcessing ? 'Turning your note into tasks…' : 'Voice capture active'}
                   </div>
                 </div>
-                <button type="button" className="btn sm ghost" onClick={() => setShowPicker(s => !s)}>
-                  Characters
-                </button>
+                {!isProcessing && (
+                  <button type="button" className="btn sm ghost" onClick={() => setShowPicker(s => !s)}>
+                    Characters
+                  </button>
+                )}
               </div>
 
-              {showPicker && (
+              {showPicker && !isProcessing && (
                 <CharacterPicker char={char} mascotState={mascotState} saveChar={saveChar} />
               )}
 
               <div style={{ fontSize: 14, color: 'var(--ink-2)', lineHeight: 1.55 }}>
                 {isProcessing
-                  ? 'Cleaning up your note and extracting the useful parts.'
+                  ? 'AI is reading your note and extracting tasks. This usually takes 15–30 seconds.'
                   : 'Speak naturally and stop when you are done.'}
               </div>
 
-              {!isProcessing && displayText && (
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {buildPreviewCards(displayText).slice(0, 2).map((card, index) => (
-                    <div
-                      key={`${card.title}-${index}`}
-                      style={{
-                        padding: '7px 11px',
-                        borderRadius: 'var(--r-pill)',
-                        background: 'var(--surface)',
-                        border: '1px solid var(--line)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        fontSize: 12.5,
-                      }}
-                    >
-                      <span className="chip dot" style={{ color: priorityColor(card.priority) }}>{card.priority}</span>
-                      <span style={{ color: 'var(--ink)' }}>{card.title}</span>
-                      <span className="t-mono" style={{ color: card.badge === 'NEW' ? 'var(--violet)' : 'var(--cyan)' }}>{card.badge}</span>
-                    </div>
-                  ))}
+              {/* Transcript box — shows during both recording and processing */}
+              {(liveTranscript || interimTranscript) && (
+                <div>
+                  {isProcessing && liveTranscript && (
+                    <div className="t-mono" style={{ color: 'var(--copy-muted)', fontSize: 9, marginBottom: 4 }}>YOUR NOTE</div>
+                  )}
+                  <div
+                    ref={transcriptScrollRef}
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: 'var(--r-md)',
+                      border: `1px solid ${isProcessing ? 'color-mix(in oklch, var(--violet) 22%, var(--line))' : 'var(--line)'}`,
+                      background: isProcessing ? 'color-mix(in oklch, var(--violet) 4%, var(--surface))' : 'var(--surface)',
+                      fontSize: 13.5,
+                      lineHeight: 1.6,
+                      color: 'var(--ink)',
+                      maxHeight: isProcessing ? 120 : 88,
+                      overflowY: 'auto',
+                      wordBreak: 'break-word',
+                    }}
+                  >
+                    {liveTranscript}
+                    {interimTranscript && (
+                      <span style={{ color: 'var(--ink-2)', fontStyle: 'italic' }}>
+                        {liveTranscript ? ' ' : ''}{interimTranscript}
+                      </span>
+                    )}
+                  </div>
                 </div>
               )}
 
               {error && <div style={{ fontSize: 13, color: 'var(--high)' }}>{error}</div>}
 
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                {isPaused ? (
-                  <button type="button" className="btn" onClick={() => beginCapture(true)}>Resume</button>
-                ) : (
-                  <button type="button" className="btn" onClick={pauseCapture} disabled={isProcessing || isFallbackRecording}>
-                    Pause
+              {!isProcessing && (
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                  {isPaused ? (
+                    <button type="button" className="btn" onClick={() => beginCapture(true)}>Resume</button>
+                  ) : (
+                    <button type="button" className="btn" onClick={pauseCapture} disabled={isFallbackRecording}>
+                      Pause
+                    </button>
+                  )}
+                  <button type="button" className="btn primary" onClick={() => void stopAndExtract()}>
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><rect width="12" height="12" rx="2" /></svg>
+                    Stop &amp; extract
                   </button>
-                )}
-                <button type="button" className="btn primary" onClick={() => void stopAndExtract()} disabled={isProcessing}>
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><rect width="12" height="12" rx="2" /></svg>
-                  Stop &amp; extract
-                </button>
-                <button type="button" className="btn ghost" onClick={cancelCapture}>Cancel</button>
-              </div>
-              <div className="t-mono" style={{ color: 'var(--copy-muted)', fontSize: 10 }}>HOLD ⌘ ␣ ANYWHERE TO DUMP</div>
+                  <button type="button" className="btn ghost" onClick={cancelCapture}>Cancel</button>
+                </div>
+              )}
+
+              {isProcessing && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <svg className="animate-spin" width="14" height="14" fill="none" viewBox="0 0 24 24" style={{ color: 'var(--violet)' }}>
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25" />
+                    <path fill="currentColor" opacity="0.75" d="M4 12a8 8 0 0 1 8-8V0C5.37 0 0 5.37 0 12h4Z" />
+                  </svg>
+                  <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>
+                    Please wait — your note was captured, tasks are being extracted
+                  </span>
+                </div>
+              )}
+
+              <div className="t-mono" style={{ color: 'var(--copy-muted)', fontSize: 10 }}>⌘ ⇧ D — START FROM ANYWHERE</div>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
@@ -460,17 +529,20 @@ export function CaptureZone({
                 width: 180,
                 height: 180,
                 borderRadius: 999,
-                border: '1px solid color-mix(in oklch, var(--violet) 28%, var(--line))',
+                border: `1px solid color-mix(in oklch, var(--violet) ${isProcessing ? '40%' : '28%'}, var(--line))`,
                 background: 'radial-gradient(circle at 30% 30%, color-mix(in oklch, var(--violet) 22%, transparent) 0%, var(--surface) 70%)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 20px 48px color-mix(in oklch, var(--violet) 14%, transparent)',
+                boxShadow: isProcessing
+                  ? '0 0 0 8px color-mix(in oklch, var(--violet) 8%, transparent), 0 20px 48px color-mix(in oklch, var(--violet) 18%, transparent)'
+                  : '0 20px 48px color-mix(in oklch, var(--violet) 14%, transparent)',
+                animation: isProcessing ? 'orb-pulse 2s ease-in-out infinite' : undefined,
               }}>
                 <CharacterDisplay id={char} state={mascotState} size={140} />
               </div>
               <span className="t-mono" style={{ color: 'var(--violet)', fontSize: 10 }}>
-                {isProcessing ? 'THINKING' : isPaused ? 'PAUSED' : 'LISTENING'}
+                {isProcessing ? 'EXTRACTING' : isPaused ? 'PAUSED' : 'LISTENING'}
               </span>
             </div>
           </div>
@@ -480,20 +552,44 @@ export function CaptureZone({
   }
 
   return (
-    <div className="card" style={{ padding: 22 }}>
+    <div className="card" style={{ padding: 22, position: 'relative' }}>
+      <button
+        type="button"
+        onClick={() => setShowPicker(s => !s)}
+        title="Change character"
+        style={{
+          position: 'absolute',
+          top: 14,
+          right: 14,
+          width: 30,
+          height: 30,
+          borderRadius: 8,
+          border: '1px solid var(--line)',
+          background: showPicker ? 'color-mix(in oklch, var(--violet) 10%, var(--surface))' : 'var(--surface)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: showPicker ? 'var(--violet)' : 'var(--ink-2)',
+          cursor: 'pointer',
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <circle cx="4" cy="4.5" r="2" fill="currentColor" opacity="0.6" />
+          <circle cx="10" cy="4.5" r="2" fill="currentColor" />
+          <circle cx="7" cy="10.5" r="2" fill="currentColor" opacity="0.4" />
+        </svg>
+      </button>
+
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 240px', gap: 24, alignItems: 'center' }}>
         <div style={{ minWidth: 0 }}>
           <div className="t-eyebrow">Voice first</div>
           <div className="t-h3" style={{ marginTop: 6, fontSize: 24 }}>Tap once and start talking.</div>
           <div className="t-body" style={{ marginTop: 8, maxWidth: 580 }}>
-            The voice flow is intentionally simple now: start listening, speak naturally, then stop to extract tasks. No live transcript clutter while you record.
+            Start listening, speak naturally, then stop to extract tasks. Your transcript shows up as you talk.
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
             <button type="button" className="btn primary" onClick={() => beginCapture(false)}>
               Start voice
-            </button>
-            <button type="button" className="btn" onClick={() => setShowPicker(s => !s)}>
-              Change animation
             </button>
           </div>
           <div className="t-mono" style={{ color: 'var(--copy-muted)', marginTop: 10 }}>
