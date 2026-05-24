@@ -1,17 +1,17 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { DashboardContent } from './dashboard-content'
+import { ErrorBoundary } from '@/components/error-boundary'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
-  
+
   const { data: { user } } = await supabase.auth.getUser()
-  
+
   if (!user) {
     redirect('/auth/login')
   }
 
-  // Fetch initial data
   const [{ data: tasks }, { data: dumps }] = await Promise.all([
     supabase
       .from('tasks')
@@ -24,10 +24,12 @@ export default async function DashboardPage() {
   ])
 
   return (
-    <DashboardContent 
-      initialTasks={tasks || []} 
-      initialDumps={dumps || []}
-      userEmail={user.email}
-    />
+    <ErrorBoundary>
+      <DashboardContent
+        initialTasks={tasks || []}
+        initialDumps={dumps || []}
+        userEmail={user.email}
+      />
+    </ErrorBoundary>
   )
 }

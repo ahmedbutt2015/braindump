@@ -13,13 +13,14 @@ import type { BrainDump } from '@/components/recent-dumps'
 import { Logo } from '@/components/logo'
 import { useIsMobile } from '@/hooks/use-mobile'
 
-type DashboardView = 'capture' | 'tasks' | 'inbox' | 'notes'
+type DashboardView = 'capture' | 'tasks' | 'inbox' | 'notes' | 'search'
 
 const VIEW_TITLES: Record<DashboardView, string> = {
   capture: 'Taking notes',
   tasks: 'All tasks',
   inbox: 'Inbox',
   notes: 'Recent notes',
+  search: 'Search',
 }
 
 interface DashboardContentProps {
@@ -70,6 +71,17 @@ export function DashboardContent({ initialTasks, initialDumps, userEmail }: Dash
   const isMobile = useIsMobile()
   const captureSectionRef = useRef<HTMLDivElement | null>(null)
   const taskSectionRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        setActiveView('search')
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
 
   useEffect(() => {
     setIsDark(document.documentElement.classList.contains('dark'))
@@ -354,6 +366,10 @@ export function DashboardContent({ initialTasks, initialDumps, userEmail }: Dash
           {activeView === 'notes' && (
             <NotesPageView dumps={dumps} />
           )}
+
+          {activeView === 'search' && (
+            <SearchPageView tasks={tasks} dumps={dumps} onStatusChange={handleStatusChange} onDelete={handleDelete} onOpen={setSelectedTask} />
+          )}
         </div>
       </main>
 
@@ -415,6 +431,7 @@ function DashboardSidebar({
         <SidebarNavItem label="Tasks" count={tasksCount} active={activeView === 'tasks'} onClick={() => onNavigate('tasks')} />
         <SidebarNavItem label="Inbox" count={pendingCount} active={activeView === 'inbox'} onClick={() => onNavigate('inbox')} />
         <SidebarNavItem label="Recent notes" count={dumps.length} active={activeView === 'notes'} onClick={() => onNavigate('notes')} />
+        <SidebarNavItem label="Search" count={0} active={activeView === 'search'} onClick={() => onNavigate('search')} />
       </div>
 
       <div className="card" style={{ padding: 14, background: 'linear-gradient(180deg, color-mix(in oklch, var(--violet) 12%, var(--surface)) 0%, var(--surface) 100%)' }}>
@@ -960,6 +977,151 @@ function NotesPageView({ dumps }: { dumps: BrainDump[] }) {
         )
       })}
     </div>
+  )
+}
+
+function SearchPageView({
+  tasks,
+  dumps,
+  onStatusChange,
+  onDelete,
+  onOpen,
+}: {
+  tasks: Task[]
+  dumps: BrainDump[]
+  onStatusChange: (id: string, status: Task['status']) => Promise<void>
+  onDelete: (id: string) => Promise<void>
+  onOpen: (task: Task) => void
+}) {
+  const [query, setQuery] = useState('')
+
+  const q = query.trim().toLowerCase()
+
+  const matchedTasks = q
+    ? tasks.filter(t =>
+        t.title.toLowerCase().includes(q) ||
+        (t.description ?? '').toLowerCase().includes(q)
+      )
+    : []
+
+  const matchedDumps = q
+    ? dumps.filter(d => d.content.toLowerCase().includes(q))
+    : []
+
+  return (
+    <div style={{ marginTop: 22 }}>
+      <div style={{ position: 'relative', marginBottom: 20 }}>
+        <svg
+          width="16" height="16"
+          viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round"
+          style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-2)', pointerEvents: 'none' }}
+        >
+          <circle cx="6.5" cy="6.5" r="5" />
+          <path d="M10.5 10.5l4 4" />
+        </svg>
+        <input
+          type="search"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          placeholder="Search tasks and notes…"
+          autoFocus
+          style={{
+            width: '100%',
+            boxSizing: 'border-box',
+            padding: '11px 14px 11px 38px',
+            borderRadius: 'var(--r-md)',
+            border: '1px solid var(--line)',
+            background: 'var(--surface)',
+            color: 'var(--ink)',
+            fontSize: 15,
+            fontFamily: 'var(--body)',
+            outline: 'none',
+          }}
+        />
+      </div>
+
+      {!q && (
+        <div className="card" style={{ padding: '36px 28px', textAlign: 'center' }}>
+          <div style={{ fontSize: 15, color: 'var(--ink-2)' }}>Type to search across all tasks and notes.</div>
+        </div>
+      )}
+
+      {q && matchedTasks.length === 0 && matchedDumps.length === 0 && (
+        <div className="card" style={{ padding: '36px 28px', textAlign: 'center' }}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--ink)' }}>No results for &ldquo;{query}&rdquo;</div>
+          <div style={{ marginTop: 6, fontSize: 13.5, color: 'var(--ink-2)' }}>Try a different word or phrase.</div>
+        </div>
+      )}
+
+      {matchedTasks.length > 0 && (
+        <div style={{ marginBottom: 28 }}>
+          <div className="t-eyebrow" style={{ marginBottom: 10 }}>
+            Tasks · {matchedTasks.length}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {matchedTasks.map(task => (
+              <div key={task.id} className="card" style={{ padding: '12px 14px', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                <span style={{
+                  marginTop: 4,
+                  width: 8, height: 8, borderRadius: 999, flexShrink: 0,
+                  background: task.priority === 'high' ? 'var(--high)' : task.priority === 'medium' ? 'var(--med)' : 'var(--low)',
+                }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)', textDecoration: task.status === 'completed' ? 'line-through' : 'none' }}>
+                    <Highlight text={task.title} query={q} />
+                  </div>
+                  {task.description && (
+                    <div style={{ marginTop: 3, fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.45 }}>
+                      <Highlight text={shorten(task.description, 140)} query={q} />
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  <button type="button" className="btn sm ghost" onClick={() => onOpen(task)}>Open</button>
+                  <button type="button" className="btn sm ghost" style={{ color: 'var(--high)' }} onClick={() => void onDelete(task.id)}>×</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {matchedDumps.length > 0 && (
+        <div>
+          <div className="t-eyebrow" style={{ marginBottom: 10 }}>
+            Notes · {matchedDumps.length}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {matchedDumps.map(dump => (
+              <div key={dump.id} className="card" style={{ padding: '12px 14px' }}>
+                <div className="t-mono" style={{ color: 'var(--copy-muted)', fontSize: 10, marginBottom: 6 }}>
+                  {format(new Date(dump.created_at), 'EEE, MMM d · h:mm a').toUpperCase()}
+                </div>
+                <div style={{ fontSize: 13.5, color: 'var(--ink)', lineHeight: 1.55 }}>
+                  <Highlight text={shorten(dump.content, 240)} query={q} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Highlight({ text, query }: { text: string; query: string }) {
+  if (!query) return <>{text}</>
+  const parts = text.split(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'))
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.toLowerCase() === query ? (
+          <mark key={i} style={{ background: 'color-mix(in oklch, var(--violet) 22%, transparent)', color: 'inherit', borderRadius: 2 }}>
+            {part}
+          </mark>
+        ) : part
+      )}
+    </>
   )
 }
 
