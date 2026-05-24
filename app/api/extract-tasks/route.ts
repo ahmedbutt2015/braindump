@@ -3,7 +3,7 @@ import { getHuggingFaceToken, maskSecret, serializeError } from '@/lib/huggingfa
 import { checkDumpRateLimit } from '@/lib/rate-limit'
 import { z } from 'zod'
 
-const HF_MODEL = 'meta-llama/Llama-3.1-70B-Instruct:novita'
+const HF_MODEL = 'deepseek-ai/DeepSeek-V3-0324:novita'
 const HF_API_URL = 'https://router.huggingface.co/v1/chat/completions'
 
 export const preferredRegion = 'iad1'
