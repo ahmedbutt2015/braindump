@@ -52,6 +52,7 @@ async function fetchDumps(): Promise<BrainDump[]> {
 export function DashboardContent({ initialTasks, initialDumps, userEmail }: DashboardContentProps) {
   const [isProcessing, setIsProcessing] = useState(false)
   const [isDark, setIsDark] = useState(false)
+  const [tutorialDismissed, setTutorialDismissed] = useState(false)
   const router = useRouter()
   const isMobile = useIsMobile()
   const captureSectionRef = useRef<HTMLDivElement | null>(null)
@@ -59,7 +60,17 @@ export function DashboardContent({ initialTasks, initialDumps, userEmail }: Dash
 
   useEffect(() => {
     setIsDark(document.documentElement.classList.contains('dark'))
+    try {
+      setTutorialDismissed(localStorage.getItem('bd-tutorial-dismissed') === '1')
+    } catch {
+      // ignore storage failures
+    }
   }, [])
+
+  const handleDismissTutorial = () => {
+    setTutorialDismissed(true)
+    try { localStorage.setItem('bd-tutorial-dismissed', '1') } catch { /* ignore */ }
+  }
 
   const toggleDark = () => {
     const next = !isDark
@@ -207,10 +218,13 @@ export function DashboardContent({ initialTasks, initialDumps, userEmail }: Dash
             onToggleDark={toggleDark}
           />
 
-          <TutorialCard
-            onStartVoice={() => captureSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-            onOpenTasks={() => taskSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-          />
+          {!tutorialDismissed && (
+            <TutorialCard
+              onStartVoice={() => captureSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              onOpenTasks={() => taskSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              onDismiss={handleDismissTutorial}
+            />
+          )}
 
           <div style={{
             display: 'grid',
@@ -366,19 +380,36 @@ function DashboardSidebar({
         </div>
       </div>
 
-      <div className="card" style={{ padding: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+      <div className="card" style={{ padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
         <div className="avatar">{initials}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {userEmail ?? 'You'}
           </div>
           <div className="t-mono" style={{ color: 'var(--copy-muted)', fontSize: 10 }}>workspace</div>
         </div>
-        <button type="button" className="btn sm" onClick={onToggleDark}>
-          {isDark ? 'Light' : 'Dark'}
-        </button>
-        <button type="button" className="btn sm ghost" onClick={() => void onSignOut()}>
-          Out
+        <ThemeToggleButton isDark={isDark} onToggle={onToggleDark} />
+        <button
+          type="button"
+          onClick={() => void onSignOut()}
+          title="Sign out"
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 8,
+            border: '1px solid var(--line)',
+            background: 'var(--surface)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--ink-2)',
+            cursor: 'pointer',
+            flexShrink: 0,
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
+          </svg>
         </button>
       </div>
     </aside>
@@ -429,35 +460,67 @@ function DashboardTopbar({
   onToggleDark: () => void
 }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 18 }}>
+    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 18 }}>
       <div>
         <div className="t-eyebrow">{todayLabel}</div>
-        <div style={{ fontSize: isMobile ? 28 : 34, lineHeight: 1.05, fontWeight: 700, color: 'var(--ink)', marginTop: 6 }}>
+        <div style={{ fontSize: isMobile ? 24 : 30, lineHeight: 1.05, fontWeight: 700, color: 'var(--ink)', marginTop: 6 }}>
           Taking notes
         </div>
-        <div style={{ marginTop: 8, fontSize: 14.5, color: 'var(--ink-2)', maxWidth: 680, lineHeight: 1.55 }}>
-          Hi {userLabel}. This page is now focused on one job: capture a thought quickly and turn it into something you can act on.
+        <div style={{ marginTop: 6, fontSize: 14, color: 'var(--ink-2)', maxWidth: 580, lineHeight: 1.5 }}>
+          Hi {userLabel}. Capture a thought quickly and turn it into something you can act on.
         </div>
       </div>
 
-      {isMobile ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <button type="button" className="btn sm" onClick={onToggleDark}>
-            {isDark ? 'Light' : 'Dark'}
-          </button>
-          <div className="avatar">{initials}</div>
-        </div>
-      ) : null}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, paddingTop: 4 }}>
+        <ThemeToggleButton isDark={isDark} onToggle={onToggleDark} />
+        {isMobile && <div className="avatar">{initials}</div>}
+      </div>
     </div>
+  )
+}
+
+function ThemeToggleButton({ isDark, onToggle }: { isDark: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+      style={{
+        width: 32,
+        height: 32,
+        borderRadius: 8,
+        border: '1px solid var(--line)',
+        background: 'var(--surface)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: 'var(--ink-2)',
+        cursor: 'pointer',
+        flexShrink: 0,
+      }}
+    >
+      {isDark ? (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="4" />
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+        </svg>
+      ) : (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+        </svg>
+      )}
+    </button>
   )
 }
 
 function TutorialCard({
   onStartVoice,
   onOpenTasks,
+  onDismiss,
 }: {
   onStartVoice: () => void
   onOpenTasks: () => void
+  onDismiss: () => void
 }) {
   const steps = [
     { number: '01', title: 'Start voice', text: 'Tap the large voice button and speak naturally.' },
@@ -467,33 +530,55 @@ function TutorialCard({
 
   return (
     <section className="card" style={{
-      padding: '18px 18px 20px',
+      padding: '16px 18px 18px',
       background: 'linear-gradient(135deg, color-mix(in oklch, var(--violet) 10%, var(--surface)) 0%, color-mix(in oklch, var(--cyan) 6%, var(--surface)) 100%)',
       borderColor: 'color-mix(in oklch, var(--violet) 22%, var(--line))',
+      position: 'relative',
     }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-        <div style={{ maxWidth: 720 }}>
-          <div className="t-eyebrow">Simple tutorial</div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--ink)', marginTop: 6 }}>
+      <button
+        type="button"
+        onClick={onDismiss}
+        title="Dismiss"
+        style={{
+          position: 'absolute',
+          top: 12,
+          right: 12,
+          width: 28,
+          height: 28,
+          borderRadius: 8,
+          border: '1px solid var(--line)',
+          background: 'var(--surface)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'var(--ink-2)',
+          cursor: 'pointer',
+        }}
+      >
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
+          <path d="M1 1l10 10M11 1L1 11" />
+        </svg>
+      </button>
+
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap', paddingRight: 36 }}>
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <div className="t-eyebrow">Getting started</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--ink)', marginTop: 4 }}>
             New here? Start with one quick voice note.
           </div>
-          <div style={{ marginTop: 8, fontSize: 14.5, color: 'var(--ink-2)', lineHeight: 1.6 }}>
-            We trimmed the page down so the first action is obvious. Use voice to capture fast, then let the right side show what needs attention.
-          </div>
         </div>
-
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', flexShrink: 0 }}>
           <button type="button" className="btn primary" onClick={onStartVoice}>Start voice</button>
           <button type="button" className="btn" onClick={onOpenTasks}>View tasks</button>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginTop: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10, marginTop: 14 }}>
         {steps.map(step => (
-          <div key={step.number} className="card" style={{ padding: 14, background: 'color-mix(in oklch, var(--surface) 92%, transparent)' }}>
-            <div className="t-mono" style={{ color: 'var(--violet)', fontSize: 11 }}>{step.number}</div>
-            <div style={{ marginTop: 10, fontSize: 15, fontWeight: 600, color: 'var(--ink)' }}>{step.title}</div>
-            <div style={{ marginTop: 6, fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.5 }}>{step.text}</div>
+          <div key={step.number} className="card" style={{ padding: 12, background: 'color-mix(in oklch, var(--surface) 92%, transparent)' }}>
+            <div className="t-mono" style={{ color: 'var(--violet)', fontSize: 10 }}>{step.number}</div>
+            <div style={{ marginTop: 8, fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>{step.title}</div>
+            <div style={{ marginTop: 4, fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.45 }}>{step.text}</div>
           </div>
         ))}
       </div>
@@ -639,16 +724,12 @@ function MobileAccountCard({
   onSignOut: () => Promise<void>
 }) {
   return (
-    <div className="card" style={{ padding: 16 }}>
-      <div className="t-eyebrow">Account</div>
-      <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
-        <button type="button" className="btn sm" onClick={onToggleDark}>
-          {isDark ? 'Switch to light' : 'Switch to dark'}
-        </button>
-        <button type="button" className="btn sm ghost" onClick={() => void onSignOut()}>
-          Sign out
-        </button>
-      </div>
+    <div className="card" style={{ padding: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
+      <div style={{ flex: 1, fontSize: 13, color: 'var(--ink-2)' }}>Account</div>
+      <ThemeToggleButton isDark={isDark} onToggle={onToggleDark} />
+      <button type="button" className="btn sm ghost" onClick={() => void onSignOut()}>
+        Sign out
+      </button>
     </div>
   )
 }

@@ -383,79 +383,97 @@ export function CaptureZone({
 
   if (activeRecording || isProcessing || isPaused) {
     return (
-      <div className="card" style={{ position: 'relative', overflow: 'hidden', minHeight: 560 }}>
+      <div className="card" style={{ position: 'relative', overflow: 'hidden' }}>
         <div className="neural-bg" />
-        <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24, padding: '36px 24px 32px' }}>
-          <div style={{ alignSelf: 'stretch', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <div className="t-eyebrow">{isProcessing ? 'Thinking' : isPaused ? 'Paused' : `Listening · ${formatElapsed(elapsedSeconds)}`}</div>
-              <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--ink)', marginTop: 4 }}>
-                {isProcessing ? 'Turning your note into tasks' : 'Voice capture'}
+        <div style={{ position: 'relative', zIndex: 1, padding: '22px 24px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 192px', gap: 28, alignItems: 'center' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                <div>
+                  <div className="t-eyebrow">
+                    {isProcessing ? 'Thinking' : isPaused ? 'Paused' : `Listening · ${formatElapsed(elapsedSeconds)}`}
+                  </div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--ink)', marginTop: 4 }}>
+                    {isProcessing ? 'Turning your note into tasks' : 'Voice capture active'}
+                  </div>
+                </div>
+                <button type="button" className="btn sm ghost" onClick={() => setShowPicker(s => !s)}>
+                  Characters
+                </button>
               </div>
-            </div>
-            <button type="button" className="btn sm ghost" onClick={() => setShowPicker(s => !s)}>
-              Characters
-            </button>
-          </div>
 
-          {showPicker && (
-            <div style={{ alignSelf: 'stretch' }}>
-              <CharacterPicker char={char} mascotState={mascotState} saveChar={saveChar} />
-            </div>
-          )}
+              {showPicker && (
+                <CharacterPicker char={char} mascotState={mascotState} saveChar={saveChar} />
+              )}
 
-          <CharacterDisplay id={char} state={mascotState} size={300} />
-
-          <div style={{ textAlign: 'center', maxWidth: 560, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div className="t-h2" style={{ marginTop: 6, textWrap: 'pretty', fontSize: 30 }}>
-              {isProcessing ? 'Cleaning up your note and extracting the useful parts.' : 'Listening now. Speak naturally and stop when you are done.'}
-            </div>
-            <div style={{ fontSize: 14, color: 'var(--ink-2)', lineHeight: 1.55 }}>
-              We are keeping the screen clean while you talk, so your transcript stays out of the way until you choose to edit later.
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
-            {buildPreviewCards(displayText).map((card, index) => (
-              <div
-                key={`${card.title}-${index}`}
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: 'var(--r-pill)',
-                  background: 'var(--surface)',
-                  border: '1px solid var(--line)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  boxShadow: 'var(--shadow-2)',
-                  fontSize: 13,
-                  animation: `float-slow ${2.4 + index * 0.4}s ease-in-out infinite`,
-                }}
-              >
-                <span className="chip dot" style={{ color: priorityColor(card.priority) }}>{card.priority}</span>
-                <span style={{ color: 'var(--ink)' }}>{card.title}</span>
-                <span className="t-mono" style={{ color: card.badge === 'NEW' ? 'var(--violet)' : 'var(--cyan)' }}>{card.badge}</span>
+              <div style={{ fontSize: 14, color: 'var(--ink-2)', lineHeight: 1.55 }}>
+                {isProcessing
+                  ? 'Cleaning up your note and extracting the useful parts.'
+                  : 'Speak naturally and stop when you are done.'}
               </div>
-            ))}
-          </div>
 
-          {error && <div style={{ fontSize: 13, color: 'var(--high)' }}>{error}</div>}
+              {!isProcessing && displayText && (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {buildPreviewCards(displayText).slice(0, 2).map((card, index) => (
+                    <div
+                      key={`${card.title}-${index}`}
+                      style={{
+                        padding: '7px 11px',
+                        borderRadius: 'var(--r-pill)',
+                        background: 'var(--surface)',
+                        border: '1px solid var(--line)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        fontSize: 12.5,
+                      }}
+                    >
+                      <span className="chip dot" style={{ color: priorityColor(card.priority) }}>{card.priority}</span>
+                      <span style={{ color: 'var(--ink)' }}>{card.title}</span>
+                      <span className="t-mono" style={{ color: card.badge === 'NEW' ? 'var(--violet)' : 'var(--cyan)' }}>{card.badge}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
 
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
-            {isPaused ? (
-              <button type="button" className="btn" onClick={() => beginCapture(true)}>Resume</button>
-            ) : (
-              <button type="button" className="btn" onClick={pauseCapture} disabled={isProcessing || isFallbackRecording}>
-                Pause
-              </button>
-            )}
-            <button type="button" className="btn primary" onClick={() => void stopAndExtract()} disabled={isProcessing}>
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><rect width="12" height="12" rx="2" /></svg>
-              Stop &amp; extract
-            </button>
-            <button type="button" className="btn ghost" onClick={cancelCapture}>Cancel</button>
+              {error && <div style={{ fontSize: 13, color: 'var(--high)' }}>{error}</div>}
+
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                {isPaused ? (
+                  <button type="button" className="btn" onClick={() => beginCapture(true)}>Resume</button>
+                ) : (
+                  <button type="button" className="btn" onClick={pauseCapture} disabled={isProcessing || isFallbackRecording}>
+                    Pause
+                  </button>
+                )}
+                <button type="button" className="btn primary" onClick={() => void stopAndExtract()} disabled={isProcessing}>
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><rect width="12" height="12" rx="2" /></svg>
+                  Stop &amp; extract
+                </button>
+                <button type="button" className="btn ghost" onClick={cancelCapture}>Cancel</button>
+              </div>
+              <div className="t-mono" style={{ color: 'var(--copy-muted)', fontSize: 10 }}>HOLD ⌘ ␣ ANYWHERE TO DUMP</div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+              <div style={{
+                width: 180,
+                height: 180,
+                borderRadius: 999,
+                border: '1px solid color-mix(in oklch, var(--violet) 28%, var(--line))',
+                background: 'radial-gradient(circle at 30% 30%, color-mix(in oklch, var(--violet) 22%, transparent) 0%, var(--surface) 70%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 20px 48px color-mix(in oklch, var(--violet) 14%, transparent)',
+              }}>
+                <CharacterDisplay id={char} state={mascotState} size={140} />
+              </div>
+              <span className="t-mono" style={{ color: 'var(--violet)', fontSize: 10 }}>
+                {isProcessing ? 'THINKING' : isPaused ? 'PAUSED' : 'LISTENING'}
+              </span>
+            </div>
           </div>
-          <div className="t-mono" style={{ color: 'var(--copy-muted)' }}>HOLD ⌘ ␣ ANYWHERE TO DUMP</div>
         </div>
       </div>
     )
