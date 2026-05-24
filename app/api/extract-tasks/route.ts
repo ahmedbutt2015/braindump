@@ -8,11 +8,15 @@ const HF_API_URL = 'https://router.huggingface.co/v1/chat/completions'
 
 export const preferredRegion = 'iad1'
 
+const nullableString = z.string().nullable().optional().transform(v =>
+  (v === 'null' || v === 'undefined' || v === '' || v == null) ? null : v
+)
+
 const TaskSchema = z.object({
   title: z.string(),
-  description: z.string().nullable().optional(),
-  priority: z.enum(['low', 'medium', 'high']),
-  due_date: z.string().nullable().optional(),
+  description: nullableString,
+  priority: z.enum(['low', 'medium', 'high']).catch('medium'),
+  due_date: nullableString,
 })
 
 const EnrichmentSchema = z.object({
