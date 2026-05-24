@@ -32,7 +32,7 @@ const ExtractedTasksSchema = z.object({
   summary: z.string(),
 })
 
-const SYSTEM_PROMPT = `You are an AI second-brain assistant. Your job is to extract tasks from brain dumps and connect them intelligently to what the user already has open.
+const SYSTEM_PROMPT = `You are an AI second-brain assistant. Extract actionable tasks from brain dumps and connect them to existing open tasks intelligently.
 
 Respond ONLY with a valid JSON object — no explanation, no markdown, no code blocks.
 
@@ -40,48 +40,49 @@ Required JSON format:
 {
   "tasks": [
     {
-      "title": "clear, action-oriented task title",
-      "description": "extra context or null",
+      "title": "specific, action-oriented task title (verb + object)",
+      "description": "extra context that helps execute the task, or null",
       "priority": "low" | "medium" | "high",
-      "due_date": "ISO date string or null"
+      "due_date": "YYYY-MM-DD or null"
     }
   ],
   "enrichments": [
     {
-      "task_id": "the exact UUID of the existing task",
+      "task_id": "exact UUID of the existing task",
       "additional_context": "new information to append to that task's description"
     }
   ],
   "subtask_additions": [
     {
-      "task_id": "the exact UUID of the existing task",
-      "subtask_title": "a specific action item that belongs under this task"
+      "task_id": "exact UUID of the existing task",
+      "subtask_title": "specific action step that belongs under this task"
     }
   ],
   "summary": "one sentence describing what was processed"
 }
 
-Decision rules — apply in order:
-1. DUPLICATE CHECK: Does the dump mention something already covered by an existing task?
-   → Do NOT create a new task for it.
-   → If the dump adds new CONTEXT, INFORMATION, or UPDATES about that task → add to "enrichments"
-   → If the dump adds a NEW SPECIFIC ACTION ITEM that belongs under that task → add to "subtask_additions"
-   → You may do both enrichment AND subtask addition for the same task if appropriate.
+DECISION RULES — apply strictly in order:
 
-2. GENUINELY NEW: Is this a completely new action item not covered by any existing task?
-   → Create a new entry in "tasks".
+1. MATCH EXISTING FIRST: Before creating any new task, check if the dump content is already covered by an existing task.
+   → If YES: use "enrichments" (for new context/info) or "subtask_additions" (for new action steps).
+   → NEVER create a new task AND a subtask_addition for the same content. Pick one.
 
-3. MULTI-TASK: Can the dump relate to multiple existing tasks?
-   → Add enrichments/subtask_additions for each relevant task.
+2. NEW TASK: Only create a new task if the content has absolutely no existing task to attach to.
+   → Title must be a specific action, not a vague concept. Bad: "Consider career". Good: "Research software dev bootcamps".
+   → Carry context into the description — don't leave it empty if the dump has useful detail.
+
+3. NEGATIVE STATEMENTS ARE NOT TASKS: If the user says they do NOT want something, that is a preference, not a task.
+   → "I don't want to work at a warehouse" → NOT a task. It's context for existing job search tasks.
+   → Attach it as an enrichment to a relevant existing task instead.
 
 4. NOTHING ACTIONABLE: Return empty arrays for all three fields.
 
 Key distinctions:
-- "enrichments" = new knowledge/context about the task (what you learned, who you met, updates)
+- "enrichments" = new context, constraints, people met, updates (appended to description)
 - "subtask_additions" = a new specific step to complete under an existing task
-- "tasks" = brand new work that has no existing home
+- "tasks" = genuinely new work with no existing home
 
-Use the exact task_id UUID from the provided list — never guess or modify it.`
+Use the exact task_id UUID from the provided list. Never fabricate or guess a UUID.`
 
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID()
