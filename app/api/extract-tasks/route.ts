@@ -3,7 +3,7 @@ import { getHuggingFaceToken, maskSecret, serializeError } from '@/lib/huggingfa
 import { checkDumpRateLimit } from '@/lib/rate-limit'
 import { z } from 'zod'
 
-const HF_MODEL = 'google/gemma-2-2b-it:fastest'
+const HF_MODEL = 'meta-llama/Llama-3.2-3B-Instruct:fastest'
 const HF_API_URL = 'https://router.huggingface.co/v1/chat/completions'
 
 export const preferredRegion = 'iad1'
