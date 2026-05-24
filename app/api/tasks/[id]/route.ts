@@ -7,6 +7,16 @@ const UpdateTaskSchema = z.object({
   priority: z.enum(['low', 'medium', 'high']).optional(),
   due_date: z.string().nullable().optional(),
   status: z.enum(['pending', 'in_progress', 'completed']).optional(),
+  notes: z.string().nullable().optional(),
+  schedule_type: z.enum(['none', 'once', 'daily', 'weekly']).optional(),
+  scheduled_date: z.string().nullable().optional(),
+  subtasks: z.array(z.object({
+    id: z.string(),
+    title: z.string(),
+    completed: z.boolean(),
+    created_at: z.string(),
+  })).optional(),
+  tags: z.array(z.string()).optional(),
 })
 
 export async function PATCH(
