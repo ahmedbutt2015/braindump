@@ -13,7 +13,7 @@ import type { BrainDump } from '@/components/recent-dumps'
 import { Logo } from '@/components/logo'
 import { useIsMobile } from '@/hooks/use-mobile'
 
-type DashboardView = 'capture' | 'tasks' | 'inbox' | 'notes' | 'search'
+type DashboardView = 'capture' | 'tasks' | 'inbox' | 'notes' | 'search' | 'settings'
 
 const VIEW_TITLES: Record<DashboardView, string> = {
   capture: 'Taking notes',
@@ -21,7 +21,10 @@ const VIEW_TITLES: Record<DashboardView, string> = {
   inbox: 'Inbox',
   notes: 'Recent notes',
   search: 'Search',
+  settings: 'Settings',
 }
+
+const DUMPS_PAGE_SIZE = 20
 
 interface DashboardContentProps {
   initialTasks: Task[]
@@ -52,11 +55,12 @@ async function fetchTasks(): Promise<Task[]> {
   return data || []
 }
 
-async function fetchDumps(): Promise<BrainDump[]> {
+async function fetchDumps(limit: number): Promise<BrainDump[]> {
   const { data, error } = await supabase
     .from('brain_dumps')
     .select('*')
     .order('created_at', { ascending: false })
+    .limit(limit)
   if (error) throw error
   return data || []
 }
@@ -123,16 +127,19 @@ export function DashboardContent({ initialTasks, initialDumps, userEmail }: Dash
     router.refresh()
   }
 
+  const [dumpsLimit, setDumpsLimit] = useState(DUMPS_PAGE_SIZE)
+
   const { data: tasks = initialTasks, isLoading: tasksLoading } = useSWR(
     'tasks',
     fetchTasks,
     { fallbackData: initialTasks },
   )
   const { data: dumps = initialDumps } = useSWR(
-    'dumps',
-    fetchDumps,
+    ['dumps', dumpsLimit],
+    ([, limit]) => fetchDumps(limit as number),
     { fallbackData: initialDumps },
   )
+  const hasMoreDumps = dumps.length === dumpsLimit
 
   const handleDumpSubmit = useCallback(async (content: string): Promise<CaptureSubmitResult | null> => {
     setIsProcessing(true)
@@ -166,7 +173,10 @@ export function DashboardContent({ initialTasks, initialDumps, userEmail }: Dash
       const toastTitle = parts.length > 0 ? parts.join(' · ') : 'Nothing new to extract'
       toast.success(toastTitle, { description: result.summary })
 
-      await Promise.all([mutate('tasks'), mutate('dumps')])
+      await Promise.all([
+        mutate('tasks'),
+        mutate((key) => Array.isArray(key) && key[0] === 'dumps'),
+      ])
 
       return {
         transcript: result.transcript ?? content,
@@ -205,6 +215,25 @@ export function DashboardContent({ initialTasks, initialDumps, userEmail }: Dash
     )
     const { error } = await supabase.from('tasks').delete().eq('id', taskId)
     if (error) mutate('tasks')
+  }, [])
+
+  const handleDumpDelete = useCallback(async (dumpId: string) => {
+    mutate(
+      (key) => Array.isArray(key) && key[0] === 'dumps',
+      (current: BrainDump[] | undefined) => current?.filter(d => d.id !== dumpId),
+      false,
+    )
+    mutate(
+      'tasks',
+      (current: Task[] | undefined) => current?.filter(t => t.brain_dump_id !== dumpId),
+      false,
+    )
+    const res = await fetch(`/api/brain-dumps/${dumpId}`, { method: 'DELETE' })
+    if (!res.ok) {
+      mutate((key) => Array.isArray(key) && key[0] === 'dumps')
+      mutate('tasks')
+      toast.error('Failed to delete note.')
+    }
   }, [])
 
   const pendingTasks = tasks.filter(task => task.status === 'pending')
@@ -345,9 +374,6 @@ export function DashboardContent({ initialTasks, initialDumps, userEmail }: Dash
           {activeView === 'tasks' && (
             <TasksPageView
               tasks={tasks}
-              pendingTasks={pendingTasks}
-              inProgressTasks={inProgressTasks}
-              completedTasks={completedTasks}
               onStatusChange={handleStatusChange}
               onDelete={handleDelete}
               onOpen={setSelectedTask}
@@ -364,11 +390,22 @@ export function DashboardContent({ initialTasks, initialDumps, userEmail }: Dash
           )}
 
           {activeView === 'notes' && (
-            <NotesPageView dumps={dumps} tasks={tasks} onOpenTask={setSelectedTask} />
+            <NotesPageView
+              dumps={dumps}
+              tasks={tasks}
+              onOpenTask={setSelectedTask}
+              onDelete={handleDumpDelete}
+              hasMore={hasMoreDumps}
+              onLoadMore={() => setDumpsLimit(l => l + DUMPS_PAGE_SIZE)}
+            />
           )}
 
           {activeView === 'search' && (
             <SearchPageView tasks={tasks} dumps={dumps} onStatusChange={handleStatusChange} onDelete={handleDelete} onOpen={setSelectedTask} />
+          )}
+
+          {activeView === 'settings' && (
+            <SettingsPageView userEmail={userEmail} onSignOut={handleSignOut} />
           )}
         </div>
       </main>
@@ -432,6 +469,7 @@ function DashboardSidebar({
         <SidebarNavItem label="Inbox" count={pendingCount} active={activeView === 'inbox'} onClick={() => onNavigate('inbox')} />
         <SidebarNavItem label="Recent notes" count={dumps.length} active={activeView === 'notes'} onClick={() => onNavigate('notes')} />
         <SidebarNavItem label="Search" count={0} active={activeView === 'search'} onClick={() => onNavigate('search')} />
+        <SidebarNavItem label="Settings" count={0} active={activeView === 'settings'} onClick={() => onNavigate('settings')} />
       </div>
 
       <div className="card" style={{ padding: 14, background: 'linear-gradient(180deg, color-mix(in oklch, var(--violet) 12%, var(--surface)) 0%, var(--surface) 100%)' }}>
@@ -826,37 +864,146 @@ function MobileAccountCard({
   )
 }
 
+type FilterPriority = 'all' | 'high' | 'medium' | 'low'
+type FilterStatus = 'all' | 'pending' | 'in_progress' | 'completed'
+type SortBy = 'newest' | 'due_date' | 'priority'
+
+function applyFilter(tasks: Task[], priority: FilterPriority, status: FilterStatus, sort: SortBy): Task[] {
+  let result = tasks
+  if (priority !== 'all') result = result.filter(t => t.priority === priority)
+  if (status !== 'all') result = result.filter(t => t.status === status)
+  const priorityRank = { high: 0, medium: 1, low: 2 }
+  if (sort === 'due_date') {
+    result = [...result].sort((a, b) => {
+      if (!a.due_date && !b.due_date) return 0
+      if (!a.due_date) return 1
+      if (!b.due_date) return -1
+      return a.due_date.localeCompare(b.due_date)
+    })
+  } else if (sort === 'priority') {
+    result = [...result].sort((a, b) => priorityRank[a.priority] - priorityRank[b.priority])
+  }
+  return result
+}
+
+function TaskFilterBar({
+  priority, setPriority, status, setStatus, sort, setSort, total,
+}: {
+  priority: FilterPriority
+  setPriority: (v: FilterPriority) => void
+  status: FilterStatus
+  setStatus: (v: FilterStatus) => void
+  sort: SortBy
+  setSort: (v: SortBy) => void
+  total: number
+}) {
+  const active = priority !== 'all' || status !== 'all' || sort !== 'newest'
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+      <div style={{ display: 'flex', gap: 4 }}>
+        {(['all', 'high', 'medium', 'low'] as FilterPriority[]).map(p => (
+          <button
+            key={p}
+            type="button"
+            className="chip"
+            onClick={() => setPriority(p)}
+            style={{
+              cursor: 'pointer',
+              background: priority === p ? 'var(--ink)' : 'transparent',
+              color: priority === p ? 'var(--bg)' : 'var(--ink-2)',
+              borderColor: priority === p ? 'var(--ink)' : 'var(--line)',
+            }}
+          >
+            {p === 'all' ? `All · ${total}` : p}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ width: 1, height: 16, background: 'var(--line)', flexShrink: 0 }} />
+
+      <div style={{ display: 'flex', gap: 4 }}>
+        {([['all', 'Any status'], ['pending', 'Open'], ['in_progress', 'In progress'], ['completed', 'Done']] as [FilterStatus, string][]).map(([s, label]) => (
+          <button
+            key={s}
+            type="button"
+            className="chip"
+            onClick={() => setStatus(s)}
+            style={{
+              cursor: 'pointer',
+              background: status === s ? 'var(--surface-2)' : 'transparent',
+              color: status === s ? 'var(--ink)' : 'var(--ink-2)',
+              borderColor: status === s ? 'var(--line-strong)' : 'var(--line)',
+              fontWeight: status === s ? 600 : 400,
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ width: 1, height: 16, background: 'var(--line)', flexShrink: 0 }} />
+
+      <div style={{ display: 'flex', gap: 4 }}>
+        {([['newest', 'Newest'], ['due_date', 'Due date'], ['priority', 'Priority']] as [SortBy, string][]).map(([s, label]) => (
+          <button
+            key={s}
+            type="button"
+            className="chip"
+            onClick={() => setSort(s)}
+            style={{
+              cursor: 'pointer',
+              background: sort === s ? 'color-mix(in oklch, var(--violet) 12%, var(--surface))' : 'transparent',
+              color: sort === s ? 'var(--violet)' : 'var(--ink-2)',
+              borderColor: sort === s ? 'color-mix(in oklch, var(--violet) 30%, var(--line))' : 'var(--line)',
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {active && (
+        <button
+          type="button"
+          className="chip"
+          onClick={() => { setPriority('all'); setStatus('all'); setSort('newest') }}
+          style={{ cursor: 'pointer', color: 'var(--high)', borderColor: 'color-mix(in oklch, var(--high) 30%, var(--line))' }}
+        >
+          × clear
+        </button>
+      )}
+    </div>
+  )
+}
+
 function TasksPageView({
   tasks,
-  pendingTasks,
-  inProgressTasks,
-  completedTasks,
   onStatusChange,
   onDelete,
   onOpen,
   isLoading,
 }: {
   tasks: Task[]
-  pendingTasks: Task[]
-  inProgressTasks: Task[]
-  completedTasks: Task[]
   onStatusChange: (id: string, status: Task['status']) => Promise<void>
   onDelete: (id: string) => Promise<void>
   onOpen: (task: Task) => void
   isLoading: boolean
 }) {
+  const [priority, setPriority] = useState<FilterPriority>('all')
+  const [status, setStatus] = useState<FilterStatus>('all')
+  const [sort, setSort] = useState<SortBy>('newest')
+  const filtered = applyFilter(tasks, priority, status, sort)
+
   return (
     <div style={{ marginTop: 22 }}>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
-        <span className="chip" style={{ background: 'var(--ink)', color: 'var(--bg)', borderColor: 'var(--ink)' }}>
-          All · {tasks.length}
-        </span>
-        <span className="chip">Open · {pendingTasks.length}</span>
-        <span className="chip">In progress · {inProgressTasks.length}</span>
-        <span className="chip">Done · {completedTasks.length}</span>
-      </div>
+      <TaskFilterBar
+        priority={priority} setPriority={setPriority}
+        status={status} setStatus={setStatus}
+        sort={sort} setSort={setSort}
+        total={tasks.length}
+      />
       <TaskList
-        tasks={tasks}
+        tasks={filtered}
         onStatusChange={onStatusChange}
         onDelete={onDelete}
         onOpen={onOpen}
@@ -927,10 +1074,16 @@ function NotesPageView({
   dumps,
   tasks,
   onOpenTask,
+  onDelete,
+  hasMore,
+  onLoadMore,
 }: {
   dumps: BrainDump[]
   tasks: Task[]
   onOpenTask: (task: Task) => void
+  onDelete: (id: string) => Promise<void>
+  hasMore: boolean
+  onLoadMore: () => void
 }) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
@@ -955,11 +1108,11 @@ function NotesPageView({
 
         return (
           <div key={dump.id} className="card" style={{ padding: '14px 16px', transition: 'background 0.1s' }}>
-            <div
-              style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer' }}
-              onClick={() => setExpandedId(isExpanded ? null : dump.id)}
-            >
-              <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+              <div
+                style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
+                onClick={() => setExpandedId(isExpanded ? null : dump.id)}
+              >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                   <div className="t-mono" style={{ color: 'var(--copy-muted)', fontSize: 10 }}>
                     {format(new Date(dump.created_at), 'EEE, MMM d · h:mm a').toUpperCase()}
@@ -982,13 +1135,35 @@ function NotesPageView({
                   {isExpanded ? dump.content : shorten(dump.content, 160)}
                 </div>
               </div>
-              <svg
-                width="14" height="14" viewBox="0 0 14 14" fill="none"
-                stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"
-                style={{ flexShrink: 0, color: 'var(--ink-2)', transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s', marginTop: 2 }}
-              >
-                <path d="M5 3l4 4-4 4" />
-              </svg>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                <button
+                  type="button"
+                  onClick={() => void onDelete(dump.id)}
+                  title="Delete note"
+                  style={{
+                    width: 26, height: 26, borderRadius: 7,
+                    border: '1px solid transparent',
+                    background: 'transparent',
+                    color: 'var(--copy-muted)',
+                    cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--high)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'color-mix(in oklch, var(--high) 30%, var(--line))' }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--copy-muted)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'transparent' }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round">
+                    <path d="M2 3h8M5 3V2h2v1M4.5 3v6M7.5 3v6M3 3l.5 7h5L9 3" />
+                  </svg>
+                </button>
+                <svg
+                  width="14" height="14" viewBox="0 0 14 14" fill="none"
+                  stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"
+                  onClick={() => setExpandedId(isExpanded ? null : dump.id)}
+                  style={{ cursor: 'pointer', color: 'var(--ink-2)', transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}
+                >
+                  <path d="M5 3l4 4-4 4" />
+                </svg>
+              </div>
             </div>
 
             {isExpanded && linkedTasks.length > 0 && (
@@ -1043,6 +1218,17 @@ function NotesPageView({
           </div>
         )
       })}
+
+      {hasMore && (
+        <button
+          type="button"
+          className="btn"
+          onClick={onLoadMore}
+          style={{ alignSelf: 'center', marginTop: 4 }}
+        >
+          Load more notes
+        </button>
+      )}
     </div>
   )
 }
@@ -1190,6 +1376,148 @@ function Highlight({ text, query }: { text: string; query: string }) {
       )}
     </>
   )
+}
+
+function SettingsPageView({
+  userEmail,
+  onSignOut,
+}: {
+  userEmail?: string
+  onSignOut: () => Promise<void>
+}) {
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [newEmail, setNewEmail] = useState('')
+  const [pwStatus, setPwStatus] = useState<'idle' | 'saving' | 'done' | 'error'>('idle')
+  const [emailStatus, setEmailStatus] = useState<'idle' | 'saving' | 'done' | 'error'>('idle')
+  const [pwError, setPwError] = useState('')
+  const [emailError, setEmailError] = useState('')
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setPwError('')
+    if (newPassword.length < 8) { setPwError('Password must be at least 8 characters.'); return }
+    if (newPassword !== confirmPassword) { setPwError('Passwords do not match.'); return }
+    setPwStatus('saving')
+    const { error } = await supabase.auth.updateUser({ password: newPassword })
+    if (error) { setPwError(error.message); setPwStatus('error') }
+    else { setPwStatus('done'); setNewPassword(''); setConfirmPassword('') }
+  }
+
+  const handleEmailChange = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setEmailError('')
+    if (!newEmail.includes('@')) { setEmailError('Enter a valid email address.'); return }
+    setEmailStatus('saving')
+    const { error } = await supabase.auth.updateUser({ email: newEmail })
+    if (error) { setEmailError(error.message); setEmailStatus('error') }
+    else { setEmailStatus('done'); setNewEmail('') }
+  }
+
+  return (
+    <div style={{ marginTop: 22, maxWidth: 520, display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+      {/* Account info */}
+      <div className="card" style={{ padding: '18px 20px' }}>
+        <div className="t-eyebrow">Account</div>
+        <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div className="avatar" style={{ width: 40, height: 40, fontSize: 16, borderRadius: 12 }}>
+            {userEmail ? userEmail.slice(0, 1).toUpperCase() : '?'}
+          </div>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>{userEmail ?? 'Unknown'}</div>
+            <div className="t-mono" style={{ color: 'var(--copy-muted)', fontSize: 10 }}>your workspace</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Change email */}
+      <div className="card" style={{ padding: '18px 20px' }}>
+        <div className="t-eyebrow">Change email</div>
+        <form onSubmit={(e) => void handleEmailChange(e)} style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <input
+            type="email"
+            value={newEmail}
+            onChange={e => { setNewEmail(e.target.value); setEmailStatus('idle') }}
+            placeholder="New email address"
+            style={inputStyle}
+          />
+          {emailError && <div style={{ fontSize: 12.5, color: 'var(--high)' }}>{emailError}</div>}
+          {emailStatus === 'done' && (
+            <div style={{ fontSize: 12.5, color: 'var(--done)' }}>Check your new inbox for a confirmation link.</div>
+          )}
+          <button
+            type="submit"
+            className="btn sm primary"
+            disabled={!newEmail || emailStatus === 'saving'}
+            style={{ alignSelf: 'flex-start' }}
+          >
+            {emailStatus === 'saving' ? 'Saving…' : 'Update email'}
+          </button>
+        </form>
+      </div>
+
+      {/* Change password */}
+      <div className="card" style={{ padding: '18px 20px' }}>
+        <div className="t-eyebrow">Change password</div>
+        <form onSubmit={(e) => void handlePasswordChange(e)} style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <input
+            type="password"
+            value={newPassword}
+            onChange={e => { setNewPassword(e.target.value); setPwStatus('idle') }}
+            placeholder="New password (min 8 characters)"
+            style={inputStyle}
+          />
+          <input
+            type="password"
+            value={confirmPassword}
+            onChange={e => { setConfirmPassword(e.target.value); setPwStatus('idle') }}
+            placeholder="Confirm new password"
+            style={inputStyle}
+          />
+          {pwError && <div style={{ fontSize: 12.5, color: 'var(--high)' }}>{pwError}</div>}
+          {pwStatus === 'done' && <div style={{ fontSize: 12.5, color: 'var(--done)' }}>Password updated.</div>}
+          <button
+            type="submit"
+            className="btn sm"
+            disabled={!newPassword || !confirmPassword || pwStatus === 'saving'}
+            style={{ alignSelf: 'flex-start' }}
+          >
+            {pwStatus === 'saving' ? 'Saving…' : 'Update password'}
+          </button>
+        </form>
+      </div>
+
+      {/* Danger zone */}
+      <div className="card" style={{ padding: '18px 20px', borderColor: 'color-mix(in oklch, var(--high) 22%, var(--line))' }}>
+        <div className="t-eyebrow" style={{ color: 'var(--high)' }}>Sign out</div>
+        <div style={{ marginTop: 8, fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.5 }}>
+          You will be taken back to the login page.
+        </div>
+        <button
+          type="button"
+          className="btn sm ghost"
+          style={{ marginTop: 12, color: 'var(--high)', borderColor: 'color-mix(in oklch, var(--high) 30%, var(--line))' }}
+          onClick={() => void onSignOut()}
+        >
+          Sign out
+        </button>
+      </div>
+    </div>
+  )
+}
+
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  boxSizing: 'border-box',
+  padding: '9px 12px',
+  borderRadius: 'var(--r-sm)',
+  border: '1px solid var(--line)',
+  background: 'var(--surface)',
+  color: 'var(--ink)',
+  fontSize: 13.5,
+  fontFamily: 'var(--body)',
+  outline: 'none',
 }
 
 function buildCaptureHint(tasks: Task[], dumps: BrainDump[]) {
