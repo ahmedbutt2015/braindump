@@ -16,7 +16,7 @@ const TaskSchema = z.object({
 })
 
 const EnrichmentSchema = z.object({
-  task_id: z.string().uuid(),
+  task_id: z.string(), // validated against real task IDs at line 206, not here
   additional_context: z.string(),
 })
 
