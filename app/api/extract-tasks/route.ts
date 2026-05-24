@@ -363,8 +363,8 @@ export async function POST(request: Request) {
       if (!subtaskError) subtaskAdditions++
     }
 
-    // Log the API call — non-blocking but with visible error if it fails
-    supabase.from('api_logs').insert({
+    // Log the API call — awaited so Vercel doesn't drop it before the function terminates
+    const { error: logError } = await supabase.from('api_logs').insert({
       user_id: user.id,
       brain_dump_id: brainDump.id,
       endpoint: 'extract-tasks',
@@ -374,9 +374,8 @@ export async function POST(request: Request) {
       enrichments_applied: enrichmentsApplied + subtaskAdditions,
       duration_ms: Date.now() - startTime,
       success: true,
-    }).then(({ error }) => {
-      if (error) console.warn('[extract-tasks] Failed to write api_log', { requestId, error })
     })
+    if (logError) console.warn('[extract-tasks] Failed to write api_log', { requestId, logError })
 
     return Response.json({
       success: true,
