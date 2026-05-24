@@ -180,7 +180,7 @@ function TaskRow({
                 color: 'var(--violet)',
               }}
             >
-              ↗ {links} dump{links === 1 ? '' : 's'}
+              ↗ {links > 1 ? `${links} notes` : 'from note'}
             </span>
           )}
         </div>
@@ -261,10 +261,9 @@ function TaskRow({
 }
 
 function getLinkedDumpCount(task: Task) {
-  if (!task.description) return 0
-  const updateCount = task.description.match(/update:/gi)?.length ?? 0
-  const paragraphCount = task.description.split('\n').filter(Boolean).length
-  return Math.max(1, Math.min(4, 1 + updateCount + Math.max(0, paragraphCount - 1)))
+  if (!task.brain_dump_id) return 0
+  const enrichmentCount = task.description?.match(/^Update:/gm)?.length ?? 0
+  return 1 + enrichmentCount
 }
 
 function getSubLine(task: Task) {

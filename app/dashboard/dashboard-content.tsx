@@ -364,7 +364,7 @@ export function DashboardContent({ initialTasks, initialDumps, userEmail }: Dash
           )}
 
           {activeView === 'notes' && (
-            <NotesPageView dumps={dumps} />
+            <NotesPageView dumps={dumps} tasks={tasks} onOpenTask={setSelectedTask} />
           )}
 
           {activeView === 'search' && (
@@ -923,7 +923,15 @@ function InboxPageView({
   )
 }
 
-function NotesPageView({ dumps }: { dumps: BrainDump[] }) {
+function NotesPageView({
+  dumps,
+  tasks,
+  onOpenTask,
+}: {
+  dumps: BrainDump[]
+  tasks: Task[]
+  onOpenTask: (task: Task) => void
+}) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   if (dumps.length === 0) {
@@ -943,36 +951,95 @@ function NotesPageView({ dumps }: { dumps: BrainDump[] }) {
     <div style={{ marginTop: 22, display: 'flex', flexDirection: 'column', gap: 10 }}>
       {dumps.map(dump => {
         const isExpanded = expandedId === dump.id
+        const linkedTasks = tasks.filter(t => t.brain_dump_id === dump.id)
+
         return (
-          <div
-            key={dump.id}
-            className="card"
-            style={{ padding: '14px 16px', cursor: 'pointer', transition: 'background 0.1s' }}
-            onClick={() => setExpandedId(isExpanded ? null : dump.id)}
-          >
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+          <div key={dump.id} className="card" style={{ padding: '14px 16px', transition: 'background 0.1s' }}>
+            <div
+              style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer' }}
+              onClick={() => setExpandedId(isExpanded ? null : dump.id)}
+            >
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="t-mono" style={{ color: 'var(--copy-muted)', fontSize: 10, marginBottom: 6 }}>
-                  {format(new Date(dump.created_at), 'EEE, MMM d · h:mm a').toUpperCase()}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <div className="t-mono" style={{ color: 'var(--copy-muted)', fontSize: 10 }}>
+                    {format(new Date(dump.created_at), 'EEE, MMM d · h:mm a').toUpperCase()}
+                  </div>
+                  {linkedTasks.length > 0 && (
+                    <span
+                      className="chip"
+                      style={{
+                        background: 'color-mix(in oklch, var(--violet) 14%, transparent)',
+                        borderColor: 'transparent',
+                        color: 'var(--violet)',
+                        fontSize: 10,
+                      }}
+                    >
+                      {linkedTasks.length} task{linkedTasks.length === 1 ? '' : 's'}
+                    </span>
+                  )}
                 </div>
                 <div style={{ fontSize: 13.5, color: 'var(--ink)', lineHeight: 1.55, whiteSpace: isExpanded ? 'pre-wrap' : 'normal', wordBreak: 'break-word' }}>
                   {isExpanded ? dump.content : shorten(dump.content, 160)}
                 </div>
               </div>
               <svg
-                width="14"
-                height="14"
-                viewBox="0 0 14 14"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.8}
-                strokeLinecap="round"
-                strokeLinejoin="round"
+                width="14" height="14" viewBox="0 0 14 14" fill="none"
+                stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"
                 style={{ flexShrink: 0, color: 'var(--ink-2)', transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s', marginTop: 2 }}
               >
                 <path d="M5 3l4 4-4 4" />
               </svg>
             </div>
+
+            {isExpanded && linkedTasks.length > 0 && (
+              <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px dashed var(--line)' }}>
+                <div className="t-mono" style={{ color: 'var(--copy-muted)', fontSize: 9, marginBottom: 8 }}>
+                  TASKS FROM THIS NOTE
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {linkedTasks.map(task => (
+                    <button
+                      key={task.id}
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onOpenTask(task) }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        padding: '8px 10px',
+                        borderRadius: 'var(--r-sm)',
+                        border: '1px solid var(--line)',
+                        background: 'var(--surface)',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        width: '100%',
+                      }}
+                    >
+                      <span style={{
+                        width: 7, height: 7, borderRadius: 999, flexShrink: 0,
+                        background: task.priority === 'high' ? 'var(--high)' : task.priority === 'medium' ? 'var(--med)' : 'var(--low)',
+                      }} />
+                      <span style={{
+                        flex: 1,
+                        fontSize: 13,
+                        fontWeight: 500,
+                        color: 'var(--ink)',
+                        textDecoration: task.status === 'completed' ? 'line-through' : 'none',
+                        opacity: task.status === 'completed' ? 0.6 : 1,
+                      }}>
+                        {task.title}
+                      </span>
+                      <span className="chip" style={{ fontSize: 10, flexShrink: 0 }}>
+                        {task.status === 'in_progress' ? 'in progress' : task.status}
+                      </span>
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" style={{ color: 'var(--ink-2)', flexShrink: 0 }}>
+                        <path d="M4 2l4 4-4 4" />
+                      </svg>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )
       })}

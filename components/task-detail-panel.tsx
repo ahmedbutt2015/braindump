@@ -1,12 +1,18 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { format } from 'date-fns'
+import { format, formatDistanceToNow } from 'date-fns'
 import { mutate } from 'swr'
 import type { Task, Subtask } from '@/components/task-list'
 import { createClient } from '@/lib/supabase/client'
 
 const supabase = createClient()
+
+interface SourceDump {
+  id: string
+  content: string
+  created_at: string
+}
 
 interface TaskDetailPanelProps {
   task: Task | null
@@ -38,6 +44,8 @@ export function TaskDetailPanel({ task, onClose, onDelete }: TaskDetailPanelProp
   const [subtasks, setSubtasks] = useState<Subtask[]>([])
   const [newSubtaskText, setNewSubtaskText] = useState('')
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const [sourceDump, setSourceDump] = useState<SourceDump | null>(null)
+  const [dumpExpanded, setDumpExpanded] = useState(false)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -52,6 +60,17 @@ export function TaskDetailPanel({ task, onClose, onDelete }: TaskDetailPanelProp
     setScheduledDate(task.scheduled_date ?? '')
     setSubtasks(Array.isArray(task.subtasks) ? task.subtasks : [])
     setSaveStatus('idle')
+    setSourceDump(null)
+    setDumpExpanded(false)
+
+    if (task.brain_dump_id) {
+      supabase
+        .from('brain_dumps')
+        .select('id, content, created_at')
+        .eq('id', task.brain_dump_id)
+        .single()
+        .then(({ data }) => { if (data) setSourceDump(data) })
+    }
   }, [task?.id])
 
   useEffect(() => {
@@ -404,11 +423,58 @@ export function TaskDetailPanel({ task, onClose, onDelete }: TaskDetailPanelProp
             />
           </PanelSection>
 
+          {/* Source dump */}
+          {sourceDump && (
+            <PanelSection label="Source note">
+              <button
+                type="button"
+                onClick={() => setDumpExpanded(e => !e)}
+                style={{
+                  width: '100%',
+                  textAlign: 'left',
+                  padding: '10px 12px',
+                  borderRadius: 'var(--r-md)',
+                  border: '1px solid var(--line)',
+                  background: dumpExpanded
+                    ? 'color-mix(in oklch, var(--violet) 6%, var(--surface))'
+                    : 'var(--surface)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 6,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <span className="t-mono" style={{ color: 'var(--violet)', fontSize: 9 }}>
+                    {formatDistanceToNow(new Date(sourceDump.created_at), { addSuffix: true }).toUpperCase()}
+                  </span>
+                  <svg
+                    width="12" height="12" viewBox="0 0 12 12" fill="none"
+                    stroke="currentColor" strokeWidth={1.6} strokeLinecap="round"
+                    style={{ color: 'var(--ink-2)', flexShrink: 0, transform: dumpExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}
+                  >
+                    <path d="M4 2l4 4-4 4" />
+                  </svg>
+                </div>
+                <div style={{
+                  fontSize: 12.5,
+                  color: 'var(--ink)',
+                  lineHeight: 1.55,
+                  whiteSpace: dumpExpanded ? 'pre-wrap' : 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: dumpExpanded ? 'unset' : 'ellipsis',
+                  wordBreak: 'break-word',
+                }}>
+                  {sourceDump.content}
+                </div>
+              </button>
+            </PanelSection>
+          )}
+
           {/* Meta */}
           <div style={{ paddingTop: 10, borderTop: '1px dashed var(--line)' }}>
             <div className="t-mono" style={{ color: 'var(--copy-muted)', fontSize: 10, lineHeight: 1.9 }}>
               <div>Created {format(new Date(task.created_at), 'EEE, MMM d · h:mm a')}</div>
-              {task.brain_dump_id && <div>Source: voice / brain dump</div>}
               {task.tags && task.tags.length > 0 && <div>Tags: {task.tags.join(', ')}</div>}
             </div>
           </div>
