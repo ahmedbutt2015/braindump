@@ -16,75 +16,114 @@ Example: user dumps "met Jake at the networking event, he's a hiring manager at 
 
 The middleware at `middleware.ts` calls `lib/supabase/middleware.ts` which refreshes the session cookie on every request. Protected routes redirect to `/auth/login`.
 
-**AI (task extraction):** `app/api/extract-tasks/route.ts` calls Hugging Face directly via `fetch` — no Vercel AI SDK, no OpenAI. Model: `mistralai/Mistral-7B-Instruct-v0.3` via the HF OpenAI-compatible chat completions endpoint (`/v1/chat/completions`). Pipeline:
-1. Fetch last 5 brain dumps + last 10 pending tasks for context
-2. POST to HF with a system prompt that demands raw JSON output (no markdown)
-3. Strip any accidental code fences from the response, then `JSON.parse` + Zod validate
-4. Save dump + tasks to Supabase
+**AI (task extraction):** `app/api/extract-tasks/route.ts` calls Hugging Face directly via `fetch`. Model: `deepseek-ai/DeepSeek-V3-0324` via the HF router (`router.huggingface.co/v1/chat/completions`). Pipeline:
+1. Fetch last 5 brain dumps + last 15 pending tasks (with subtasks) for context
+2. POST to HF with a system prompt that demands raw JSON — no markdown
+3. Strip any accidental code fences, `JSON.parse` + Zod validate
+4. Apply enrichments (append context to existing task descriptions) and subtask additions
+5. Save dump + new tasks + api_log to Supabase
 
-Uses `HUGGINGFACE_API_TOKEN` — the same token used by the voice transcription route. No OpenAI key needed anywhere.
+Response shape: `{ tasks[], enrichments[], subtask_additions[], summary }`. All three arrays are applied separately so new dumps can update existing tasks without duplicating them.
 
-Cold-start handling: HF free tier returns `{ error: "...loading..." }` with status 503. The route returns `{ modelLoading: true, retryAfter: N }` and the dashboard shows a warning toast with the wait time.
+Uses `HUGGINGFACE_API_TOKEN`. Cold-start handling: HF free tier returns `{ error: "...loading..." }` with status 503. The route returns `{ modelLoading: true, retryAfter: N }` and the dashboard shows a warning toast.
 
-**Voice (not yet on main):** Branch `voice-command-generation` has:
-- `components/voice-input-button.tsx` — tries Web Speech API first, falls back to Hugging Face Whisper if browser doesn't support it or mic is denied
-- `hooks/use-speech-recognition.ts` — wraps the Web Speech API
-- `app/api/transcribe/route.ts` — sends audio to `openai/whisper-large-v3` on Hugging Face; returns `{ modelLoading: true }` if the model is cold (HF free tier)
+**Voice:** On `main`. Two-tier:
+- `components/capture-zone.tsx` — primary UI; uses Web Speech API via `hooks/use-speech-recognition.ts`; falls back to MediaRecorder → `POST /api/transcribe` → HF Whisper-large-v3
+- `components/voice-input-button.tsx` — secondary standalone button (wired in capture-zone)
+- `app/api/transcribe/route.ts` — sends audio to `openai/whisper-large-v3` on HF; handles cold-start retry
+
+**Rate limiting:** `lib/rate-limit.ts` — DB-backed for dumps (20/hour, counts rows in `brain_dumps`), in-memory for transcription (30/hour per user).
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `app/api/extract-tasks/route.ts` | Core AI pipeline: dump → tasks |
-| `app/api/transcribe/route.ts` | Voice → text via Hugging Face Whisper (branch only) |
-| `app/dashboard/page.tsx` | Server component: auth check + initial SSR data fetch |
-| `app/dashboard/dashboard-content.tsx` | Client shell: SWR data, handlers for dump/status/delete |
-| `components/brain-dump-input.tsx` | Textarea + submit button (voice button not yet wired in on main) |
-| `components/task-list.tsx` | Task sections, status cycling, delete |
-| `components/recent-dumps.tsx` | Sidebar with last 5 dumps |
+| `app/api/extract-tasks/route.ts` | Core AI pipeline: dump → tasks + enrichments + subtask_additions |
+| `app/api/transcribe/route.ts` | Voice → text via HF Whisper |
+| `app/api/tasks/[id]/route.ts` | PATCH (full field set) + DELETE for individual tasks |
+| `app/dashboard/page.tsx` | Server component: auth check + SSR data fetch, wrapped in ErrorBoundary |
+| `app/dashboard/dashboard-content.tsx` | Client shell: SWR, capture, task/inbox/notes/search views |
+| `components/capture-zone.tsx` | Full voice+text capture UI with mascot, mobile overlay, result screen |
+| `components/task-list.tsx` | Task rows with status cycling, delete, open-detail |
+| `components/task-detail-panel.tsx` | Slide-in panel: edit title, priority, status, due date, schedule, description, subtasks, notes |
+| `components/error-boundary.tsx` | React class error boundary wrapping the dashboard |
+| `lib/rate-limit.ts` | Rate limiting: DB-backed (dumps), in-memory (transcribe) |
+| `lib/huggingface.ts` | Token resolution + error serialization helpers |
 | `lib/supabase/server.ts` | Supabase client for server-side code |
 | `lib/supabase/client.ts` | Supabase singleton for client-side code |
 | `middleware.ts` | Session refresh on every request |
+| `supabase/migrations/001_task_enhancements.sql` | Adds subtasks, notes, schedule_type, scheduled_date, tags columns + api_logs table |
+| `supabase/migrations/002_updated_at_trigger_and_rls.sql` | updated_at trigger, RLS policies, query indexes |
 
 ## Database Tables
 
 ```
-brain_dumps: id, user_id, content, created_at
-tasks: id, user_id, brain_dump_id, title, description, priority (low/medium/high), status (pending/in_progress/completed), due_date, created_at, updated_at
+brain_dumps : id, user_id, content, created_at
+tasks       : id, user_id, brain_dump_id, title, description,
+              priority (low/medium/high), status (pending/in_progress/completed),
+              due_date, subtasks (jsonb), notes, schedule_type, scheduled_date,
+              tags (text[]), created_at, updated_at
+api_logs    : id, user_id, brain_dump_id, endpoint, model, content_length,
+              tasks_extracted, enrichments_applied, duration_ms, success, error_message, created_at
 ```
 
-RLS: both tables should have row-level security so users only see their own rows. **Verify this is actually configured in Supabase before shipping.**
+RLS is enabled on all three tables via migration 002. `updated_at` is kept accurate by a DB trigger (also migration 002).
+
+**IMPORTANT — run both migrations in the Supabase SQL editor before shipping:**
+1. `supabase/migrations/001_task_enhancements.sql`
+2. `supabase/migrations/002_updated_at_trigger_and_rls.sql`
 
 ## Data Flow
 
-1. User types (or speaks) → `BrainDumpInput` calls `onSubmit(content)`
+1. User speaks or types → `CaptureZone` calls `onSubmit(content)`
 2. `DashboardContent.handleDumpSubmit` POSTs to `/api/extract-tasks`
-3. API route fetches context, calls GPT-4o-mini, saves dump + tasks to Supabase
-4. Returns `{ tasksExtracted, summary }`
+3. API route fetches context, calls DeepSeek-V3, saves dump + tasks + applies enrichments + logs to Supabase
+4. Returns `{ tasksExtracted, enrichmentsApplied, subtaskAdditions, summary, extractedTasks, transcript }`
 5. Client calls `mutate('tasks')` and `mutate('dumps')` to revalidate SWR caches
-6. Task list and recent dumps sidebar re-render with fresh data
+6. Task list and recent dumps sidebar re-render with fresh data; toast shows the summary
 
-## The Core Feature Not Yet Built
+## What's Done vs. What's Left
 
-The current AI prompt includes existing tasks to avoid duplicates, but it doesn't yet:
-- Detect when a new dump is related to an existing task and enrich it
-- Link a dump to multiple existing tasks
-- Show "related" dumps/tasks in the UI
+### Done ✓
 
-This is the main differentiator and the most important thing to build next. The prompt engineering for this lives in `app/api/extract-tasks/route.ts` around line 64.
+| Feature | Where |
+|---------|-------|
+| Voice input (Web Speech API + Whisper fallback) | `components/capture-zone.tsx`, `app/api/transcribe/route.ts` |
+| Smart task linking — enrichments + subtask_additions | `app/api/extract-tasks/route.ts` |
+| Rate limiting (dumps: 20/hr DB-backed; transcribe: 30/hr in-memory) | `lib/rate-limit.ts` |
+| Toast notifications — all errors/success use sonner | `app/dashboard/dashboard-content.tsx` |
+| Task editing — full panel (title, priority, status, due date, schedule, subtasks, notes) | `components/task-detail-panel.tsx` |
+| First-time onboarding tutorial card (dismissible, localStorage) | `app/dashboard/dashboard-content.tsx` |
+| Landing page with hero, feature strip, CTA | `app/page.tsx` |
+| Mobile UX — full mobile overlay flow for capture + result | `components/capture-zone.tsx` |
+| Search — ⌘K shortcut, keyword highlight across tasks + notes | `app/dashboard/dashboard-content.tsx` |
+| Error boundary on dashboard | `components/error-boundary.tsx` |
+| DB migration: extended task columns + api_logs table | `supabase/migrations/001_task_enhancements.sql` |
+| DB migration: updated_at trigger + RLS policies + indexes | `supabase/migrations/002_updated_at_trigger_and_rls.sql` |
+| PATCH endpoint accepts all task-detail-panel fields | `app/api/tasks/[id]/route.ts` |
 
-The API route will need a new return shape — alongside `tasks` (new tasks to create), it should also return `enrichments` (existing task IDs + what context to append). The DB call to apply enrichments would be a `UPDATE tasks SET description = ... WHERE id = ...`.
+### Still Missing ✗
 
-## Known Bugs / Issues to Fix Before Shipping
+| Feature | Why it matters | Effort |
+|---------|---------------|--------|
+| **Dump → task link UI** | Tasks show `brain_dump_id` but there's no way to click a task and see the dump that created it, or vice versa — breaks the "second brain" narrative | Medium |
+| **Landing page futuristic redesign** | Current page is functional but doesn't match the visual pitch ("make it look like the pitch") | Large |
+| **Run migrations in Supabase** | 001 + 002 are SQL files on disk; the extended task columns, RLS, and trigger do not exist in the live DB until someone runs them | Ops |
+| **Tests** | No unit or integration tests anywhere — risky when making AI prompt changes | Large |
 
-| Location | Issue | Priority |
-|----------|-------|----------|
-| `app/dashboard/dashboard-content.tsx:80` | Uses `alert()` for error feedback — replace with `sonner` toast | Low |
-| Supabase dashboard | RLS policies on `brain_dumps` and `tasks` not verified — must confirm users can only see their own rows | **Critical** |
-| `app/api/extract-tasks/route.ts` | No rate limiting — one user can make unlimited AI calls | **Critical** |
-| `app/api/transcribe/route.ts` | No rate limiting on voice transcription endpoint | **Critical** |
-| Supabase dashboard | No `updated_at` trigger — app writes it manually but direct DB access bypasses it | Medium |
-| `app/dashboard/dashboard-content.tsx` | No error boundary — unhandled error kills the whole page | Medium |
+### Known Bugs Fixed
+
+| Bug | Status |
+|-----|--------|
+| `alert()` for error feedback | Fixed — sonner toasts throughout |
+| No error boundary on dashboard | Fixed — `components/error-boundary.tsx` |
+| No rate limiting on extract-tasks | Fixed — `lib/rate-limit.ts` (DB-backed) |
+| No rate limiting on transcribe | Fixed — `lib/rate-limit.ts` (in-memory) |
+| No `updated_at` DB trigger | Fixed — migration 002 (needs to be run) |
+| RLS not verified | Fixed — migration 002 creates policies (needs to be run) |
+| Voice on separate branch | Fixed — merged to main |
+| Smart task linking not built | Fixed — enrichments + subtask_additions live |
+| PATCH endpoint missing extended fields | Fixed — subtasks, notes, schedule_type, scheduled_date, tags now accepted |
 
 ## What This App Is (for context when writing copy or prompts)
 
@@ -94,16 +133,6 @@ The key pitch: most productivity apps make you organize as you go. BrainDump let
 
 Landing page copy (approved):
 > "Your thoughts don't disappear here. Most apps make you organize as you go. BrainDump lets you dump everything raw — text or voice — and the AI does the organizing. But what's different: it remembers. Every dump, every task, every connection you've ever made lives in context. So when you mention someone you met, or an idea you had, the AI already knows what's open, what's related, and what needs updating. It's not a note app. It's not a task manager. It's a second brain that actually reads what you put in it."
-
-## Recommended Ship Order
-
-1. **Merge voice branch** — biggest UX impact, nearly done. Voice is the natural input mode for quick thought capture
-2. **Smart task linking** — the core differentiator; without it the app is just a worse Todoist  
-3. **RLS verification + rate limiting** — required before any public access
-4. **First-time user onboarding** — empty state with guided first dump; new users churn without it
-5. **Task editing + dump → task view** — lets users trust and correct the AI
-6. **Landing page redesign (futuristic UI)** — once core works, make it look like the pitch
-7. **Mobile UX + search** — daily use and scale
 
 ## Conventions
 
@@ -121,8 +150,8 @@ There is **no separate backend server**. This is a single full-stack Next.js app
 - **Backend:** Next.js API Routes in the same repo — deployed as Vercel serverless functions. No Express, no separate process
 - **Database:** Supabase (hosted PostgreSQL). Accessed via `@supabase/ssr` — two modes: server (cookie-based) and browser (singleton)
 - **Auth:** Supabase Auth. JWT tokens. Middleware refreshes the session cookie on every request
-- **AI:** Hugging Face `mistralai/Mistral-7B-Instruct-v0.3` for task extraction + `openai/whisper-large-v3` for voice — both via direct `fetch` to HF API, free tier, one shared `HUGGINGFACE_API_TOKEN`
-- **Voice:** Web Speech API (browser-native, zero cost) → Hugging Face Whisper-large-v3 fallback (free tier, ~20s cold start on first use)
+- **AI:** Hugging Face `deepseek-ai/DeepSeek-V3-0324` via `router.huggingface.co` for task extraction + `openai/whisper-large-v3` for voice — both via direct `fetch` to HF API, free tier, one shared `HUGGINGFACE_API_TOKEN`
+- **Voice:** Web Speech API (browser-native, zero cost) → HF Whisper-large-v3 fallback (free tier, ~20s cold start on first use)
 - **Hosting:** Vercel — frontend + serverless functions deploy together
 
 ## Environment Variables Needed
@@ -130,5 +159,5 @@ There is **no separate backend server**. This is a single full-stack Next.js app
 ```
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
-HUGGINGFACE_API_TOKEN   # required — covers both task extraction (Mistral-7B) and voice transcription (Whisper)
+HUGGINGFACE_API_TOKEN   # covers both task extraction (DeepSeek-V3) and voice transcription (Whisper)
 ```
