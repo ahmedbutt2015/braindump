@@ -98,18 +98,19 @@ RLS is enabled on all three tables via migration 002. `updated_at` is kept accur
 | Mobile UX — full mobile overlay flow for capture + result | `components/capture-zone.tsx` |
 | Search — ⌘K shortcut, keyword highlight across tasks + notes | `app/dashboard/dashboard-content.tsx` |
 | Error boundary on dashboard | `components/error-boundary.tsx` |
-| DB migration: extended task columns + api_logs table | `supabase/migrations/001_task_enhancements.sql` |
-| DB migration: updated_at trigger + RLS policies + indexes | `supabase/migrations/002_updated_at_trigger_and_rls.sql` |
+| DB migrations run in Supabase | `supabase/migrations/001_*`, `002_*` |
 | PATCH endpoint accepts all task-detail-panel fields | `app/api/tasks/[id]/route.ts` |
+| Dump → task link UI — source note in task panel, task list per note | `components/task-detail-panel.tsx`, `app/dashboard/dashboard-content.tsx` |
 
 ### Still Missing ✗
 
 | Feature | Why it matters | Effort |
 |---------|---------------|--------|
-| **Dump → task link UI** | Tasks show `brain_dump_id` but there's no way to click a task and see the dump that created it, or vice versa — breaks the "second brain" narrative | Medium |
-| **Landing page futuristic redesign** | Current page is functional but doesn't match the visual pitch ("make it look like the pitch") | Large |
-| **Run migrations in Supabase** | 001 + 002 are SQL files on disk; the extended task columns, RLS, and trigger do not exist in the live DB until someone runs them | Ops |
-| **Tests** | No unit or integration tests anywhere — risky when making AI prompt changes | Large |
+| **Delete a dump** | Users can delete tasks but not notes — no way to clean up a bad capture | Small |
+| **Task filtering / sorting** | No way to filter by priority or sort by due date — useless at 50+ tasks | Small |
+| **Tests** | No unit or integration tests — risky when tuning the AI prompt | Large |
+| **User settings page** | No way to change password or email after sign-up | Small |
+| **Dump pagination / infinite scroll** | All dumps load on every page render — will slow down at scale | Medium |
 
 ### Known Bugs Fixed
 
@@ -119,11 +120,12 @@ RLS is enabled on all three tables via migration 002. `updated_at` is kept accur
 | No error boundary on dashboard | Fixed — `components/error-boundary.tsx` |
 | No rate limiting on extract-tasks | Fixed — `lib/rate-limit.ts` (DB-backed) |
 | No rate limiting on transcribe | Fixed — `lib/rate-limit.ts` (in-memory) |
-| No `updated_at` DB trigger | Fixed — migration 002 (needs to be run) |
-| RLS not verified | Fixed — migration 002 creates policies (needs to be run) |
+| No `updated_at` DB trigger | Fixed — migration 002 |
+| RLS not verified | Fixed — migration 002 |
 | Voice on separate branch | Fixed — merged to main |
 | Smart task linking not built | Fixed — enrichments + subtask_additions live |
 | PATCH endpoint missing extended fields | Fixed — subtasks, notes, schedule_type, scheduled_date, tags now accepted |
+| Dump → task link UI missing | Fixed — source note in task panel; tasks listed per note in Notes view |
 
 ## What This App Is (for context when writing copy or prompts)
 
