@@ -32,7 +32,11 @@ const ExtractedTasksSchema = z.object({
   summary: z.string(),
 })
 
-const SYSTEM_PROMPT = `You are an AI second-brain assistant. Extract actionable tasks from brain dumps and connect them to existing open tasks intelligently.
+function buildSystemPrompt(): string {
+  const today = new Date().toISOString().split('T')[0]
+  return `You are an AI second-brain assistant. Extract actionable tasks from brain dumps and connect them to existing open tasks intelligently.
+
+Today's date: ${today}. Use this when inferring due dates — never produce a date in the past unless the user explicitly stated a past date. Always use the correct year.
 
 Respond ONLY with a valid JSON object — no explanation, no markdown, no code blocks.
 
@@ -64,25 +68,27 @@ Required JSON format:
 DECISION RULES — apply strictly in order:
 
 1. MATCH EXISTING FIRST: Before creating any new task, check if the dump content is already covered by an existing task.
-   → If YES: use "enrichments" (for new context/info) or "subtask_additions" (for new action steps).
-   → NEVER create a new task AND a subtask_addition for the same content. Pick one.
+   → If YES: use "enrichments" (for new context/info) or "subtask_additions" (for new action steps) on that task.
+   → CRITICAL: If you add an enrichment or subtask_addition for some content, do NOT also create a new task for that same content. One action per piece of content — never both.
 
 2. NEW TASK: Only create a new task if the content has absolutely no existing task to attach to.
    → Title must be a specific action, not a vague concept. Bad: "Consider career". Good: "Research software dev bootcamps".
    → Carry context into the description — don't leave it empty if the dump has useful detail.
+   → Description must match the title — don't put unrelated content in the description.
 
 3. NEGATIVE STATEMENTS ARE NOT TASKS: If the user says they do NOT want something, that is a preference, not a task.
-   → "I don't want to work at a warehouse" → NOT a task. It's context for existing job search tasks.
-   → Attach it as an enrichment to a relevant existing task instead.
+   → "I don't want to work at a warehouse" → NOT a task. Attach it as an enrichment constraint to a relevant existing task.
+   → "I'm not ready for X yet" → NOT a task. Context only.
 
 4. NOTHING ACTIONABLE: Return empty arrays for all three fields.
 
 Key distinctions:
 - "enrichments" = new context, constraints, people met, updates (appended to description)
-- "subtask_additions" = a new specific step to complete under an existing task
-- "tasks" = genuinely new work with no existing home
+- "subtask_additions" = a new specific action step that belongs under an existing task
+- "tasks" = genuinely new work with absolutely no existing home
 
 Use the exact task_id UUID from the provided list. Never fabricate or guess a UUID.`
+}
 
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID()
@@ -178,7 +184,7 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         model: HF_MODEL,
         messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'system', content: buildSystemPrompt() },
           { role: 'user', content: userMessage },
         ],
         max_tokens: 2000,
