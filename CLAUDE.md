@@ -101,16 +101,24 @@ RLS is enabled on all three tables via migration 002. `updated_at` is kept accur
 | DB migrations run in Supabase | `supabase/migrations/001_*`, `002_*` |
 | PATCH endpoint accepts all task-detail-panel fields | `app/api/tasks/[id]/route.ts` |
 | Dump → task link UI — source note in task panel, task list per note | `components/task-detail-panel.tsx`, `app/dashboard/dashboard-content.tsx` |
+| Delete a dump — trash icon on each note, optimistic removal of dump + linked tasks | `app/dashboard/dashboard-content.tsx`, `app/api/brain-dumps/[id]/route.ts` |
+| Task filtering + sorting — filter by priority/status, sort by newest/due date/priority | `app/dashboard/dashboard-content.tsx` (`TaskFilterBar`, `applyFilter`) |
+| Settings page — change email + password via Supabase auth, sign-out card | `app/dashboard/dashboard-content.tsx` (`SettingsPageView`) |
+| Dump pagination — SWR key `['dumps', limit]`, starts at 20, Load More increments by 20 | `app/dashboard/dashboard-content.tsx` |
+| Vitest test suite — 24 tests: rate-limit, Zod schemas, dedup logic, utility functions | `__tests__/` |
 
 ### Still Missing ✗
 
-| Feature | Why it matters | Effort |
-|---------|---------------|--------|
-| **Delete a dump** | Users can delete tasks but not notes — no way to clean up a bad capture | Small |
-| **Task filtering / sorting** | No way to filter by priority or sort by due date — useless at 50+ tasks | Small |
-| **Tests** | No unit or integration tests — risky when tuning the AI prompt | Large |
-| **User settings page** | No way to change password or email after sign-up | Small |
-| **Dump pagination / infinite scroll** | All dumps load on every page render — will slow down at scale | Medium |
+Nothing from the original ship plan is unbuilt. The app is feature-complete for a first public launch.
+
+Possible next improvements (not blockers):
+
+| Feature | Why | Effort |
+|---------|-----|--------|
+| **E2E tests (Playwright)** | Unit tests cover logic; no browser-level test covers the full dump → task flow | Large |
+| **Bulk task actions** | No way to mark multiple tasks done at once — annoying at scale | Medium |
+| **Task due-date reminders** | No notifications when a task is overdue | Large (needs cron + email) |
+| **Export (CSV / JSON)** | Can't get your data out of the app | Small |
 
 ### Known Bugs Fixed
 
