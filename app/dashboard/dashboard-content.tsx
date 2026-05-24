@@ -35,6 +35,7 @@ interface ExtractTasksApiResponse {
   summary?: string
   tasksExtracted?: number
   enrichmentsApplied?: number
+  subtaskAdditions?: number
   extractedTasks?: CaptureSubmitResult['extractedTasks']
   transcript?: string
 }
@@ -143,12 +144,15 @@ export function DashboardContent({ initialTasks, initialDumps, userEmail }: Dash
         return null
       }
 
-      const enrichmentNote = result.enrichmentsApplied && result.enrichmentsApplied > 0
-        ? ` · Enriched ${result.enrichmentsApplied} existing task${result.enrichmentsApplied !== 1 ? 's' : ''}`
-        : ''
-      toast.success(`Extracted ${result.tasksExtracted ?? 0} task${(result.tasksExtracted ?? 0) !== 1 ? 's' : ''}${enrichmentNote}`, {
-        description: result.summary,
-      })
+      const parts: string[] = []
+      const extracted = result.tasksExtracted ?? 0
+      const enriched = result.enrichmentsApplied ?? 0
+      const subtasks = result.subtaskAdditions ?? 0
+      if (extracted > 0) parts.push(`${extracted} new task${extracted !== 1 ? 's' : ''}`)
+      if (enriched > 0) parts.push(`${enriched} enriched`)
+      if (subtasks > 0) parts.push(`${subtasks} subtask${subtasks !== 1 ? 's' : ''} added`)
+      const toastTitle = parts.length > 0 ? parts.join(' · ') : 'Nothing new to extract'
+      toast.success(toastTitle, { description: result.summary })
 
       await Promise.all([mutate('tasks'), mutate('dumps')])
 
@@ -157,6 +161,7 @@ export function DashboardContent({ initialTasks, initialDumps, userEmail }: Dash
         summary: result.summary ?? 'Captured your dump.',
         tasksExtracted: result.tasksExtracted ?? 0,
         enrichmentsApplied: result.enrichmentsApplied ?? 0,
+        subtaskAdditions: result.subtaskAdditions ?? 0,
         extractedTasks: result.extractedTasks ?? [],
       }
     } catch {

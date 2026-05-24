@@ -26,6 +26,7 @@ export interface CaptureSubmitResult {
   summary: string
   tasksExtracted: number
   enrichmentsApplied: number
+  subtaskAdditions: number
   extractedTasks: Array<{
     title: string
     description: string | null
