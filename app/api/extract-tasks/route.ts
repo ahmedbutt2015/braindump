@@ -3,7 +3,7 @@ import { getHuggingFaceToken, maskSecret, serializeError } from '@/lib/huggingfa
 import { checkDumpRateLimit } from '@/lib/rate-limit'
 import { z } from 'zod'
 
-const HF_MODEL = 'meta-llama/Llama-3.1-8B-Instruct:novita'
+const HF_MODEL = 'meta-llama/Llama-3.1-70B-Instruct:novita'
 const HF_API_URL = 'https://router.huggingface.co/v1/chat/completions'
 
 export const preferredRegion = 'iad1'
@@ -254,6 +254,31 @@ export async function POST(request: Request) {
     output.subtask_additions = (output.subtask_additions ?? []).filter(
       s => s.task_id && UUID_RE.test(s.task_id) && s.subtask_title?.trim()
     )
+
+    // Code-level dedup: if the model added a subtask or enrichment for existing task content,
+    // drop any new task whose title shares 2+ meaningful words with that subtask/enrichment.
+    // This catches the "double-dip" where the model enriches AND creates a duplicate new task.
+    if (output.subtask_additions.length > 0 || output.enrichments.length > 0) {
+      const coveredWords = new Set<string>()
+      const STOP_WORDS = new Set(['the', 'and', 'for', 'with', 'that', 'this', 'from', 'into', 'also', 'just', 'then'])
+
+      for (const s of output.subtask_additions) {
+        s.subtask_title!.toLowerCase().split(/\s+/).forEach(w => {
+          if (w.length > 3 && !STOP_WORDS.has(w)) coveredWords.add(w)
+        })
+      }
+      for (const e of output.enrichments) {
+        e.additional_context!.toLowerCase().split(/\s+/).forEach(w => {
+          if (w.length > 3 && !STOP_WORDS.has(w)) coveredWords.add(w)
+        })
+      }
+
+      output.tasks = output.tasks.filter(task => {
+        const titleWords = task.title.toLowerCase().split(/\s+/).filter(w => w.length > 3 && !STOP_WORDS.has(w))
+        const overlap = titleWords.filter(w => coveredWords.has(w)).length
+        return overlap < 2
+      })
+    }
 
     // Save the brain dump
     const { data: brainDump, error: dumpError } = await supabase
