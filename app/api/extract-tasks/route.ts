@@ -3,8 +3,8 @@ import { getHuggingFaceToken, maskSecret, serializeError } from '@/lib/huggingfa
 import { checkDumpRateLimit } from '@/lib/rate-limit'
 import { z } from 'zod'
 
-const HF_MODEL = 'mistralai/Mistral-7B-Instruct-v0.3'
-const HF_API_URL = `https://api-inference.huggingface.co/models/${HF_MODEL}/v1/chat/completions`
+const HF_MODEL = 'mistralai/Mistral-7B-Instruct-v0.2'
+const HF_API_URL = 'https://router.huggingface.co/hf-inference/v1/chat/completions'
 
 export const preferredRegion = 'iad1'
 
