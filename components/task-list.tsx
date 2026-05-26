@@ -32,6 +32,8 @@ interface TaskListProps {
   onDelete: (taskId: string) => Promise<void>
   onOpen?: (task: Task) => void
   isLoading?: boolean
+  selectedIds?: Set<string>
+  onToggleSelect?: (id: string) => void
 }
 
 const priorityMeta = {
@@ -46,7 +48,7 @@ const nextStatus: Record<Task['status'], Task['status']> = {
   completed: 'pending',
 }
 
-export function TaskList({ tasks, onStatusChange, onDelete, onOpen, isLoading }: TaskListProps) {
+export function TaskList({ tasks, onStatusChange, onDelete, onOpen, isLoading, selectedIds, onToggleSelect }: TaskListProps) {
   if (isLoading) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -105,6 +107,8 @@ export function TaskList({ tasks, onStatusChange, onDelete, onOpen, isLoading }:
           onStatusChange={onStatusChange}
           onDelete={onDelete}
           onOpen={onOpen}
+          isSelected={selectedIds?.has(task.id)}
+          onToggleSelect={onToggleSelect}
         />
       ))}
     </div>
@@ -116,11 +120,15 @@ function TaskRow({
   onStatusChange,
   onDelete,
   onOpen,
+  isSelected,
+  onToggleSelect,
 }: {
   task: Task
   onStatusChange: (taskId: string, status: Task['status']) => Promise<void>
   onDelete: (taskId: string) => Promise<void>
   onOpen?: (task: Task) => void
+  isSelected?: boolean
+  onToggleSelect?: (id: string) => void
 }) {
   const done = task.status === 'completed'
   const inProgress = task.status === 'in_progress'
@@ -138,35 +146,64 @@ function TaskRow({
         display: 'flex',
         gap: 12,
         alignItems: 'flex-start',
-        opacity: done ? 0.65 : 1,
+        opacity: done && !onToggleSelect ? 0.65 : 1,
+        background: isSelected ? 'color-mix(in oklch, var(--violet) 8%, var(--surface))' : undefined,
+        borderColor: isSelected ? 'color-mix(in oklch, var(--violet) 28%, var(--line))' : undefined,
       }}
     >
-      <button
-        type="button"
-        onClick={() => onStatusChange(task.id, nextStatus[task.status])}
-        aria-label={`Mark as ${nextStatus[task.status].replace('_', ' ')}`}
-        style={{
-          width: 18,
-          height: 18,
-          borderRadius: 5,
-          border: done ? 'none' : '1.5px solid var(--line-strong)',
-          background: done ? 'var(--done)' : 'transparent',
-          marginTop: 2,
-          flexShrink: 0,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-        }}
-      >
-        {done ? (
-          <svg width="11" height="11" viewBox="0 0 12 12">
-            <path d="M2.5 6.5 5 9l4.5-5" stroke="white" strokeWidth="2" fill="none" strokeLinecap="round" />
-          </svg>
-        ) : inProgress ? (
-          <div style={{ width: 7, height: 7, borderRadius: 999, background: 'var(--violet)' }} />
-        ) : null}
-      </button>
+      {onToggleSelect ? (
+        <button
+          type="button"
+          onClick={() => onToggleSelect(task.id)}
+          aria-label={isSelected ? 'Deselect task' : 'Select task'}
+          style={{
+            width: 18,
+            height: 18,
+            borderRadius: 5,
+            border: isSelected ? 'none' : '1.5px solid var(--line-strong)',
+            background: isSelected ? 'var(--violet)' : 'transparent',
+            marginTop: 2,
+            flexShrink: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+          }}
+        >
+          {isSelected && (
+            <svg width="11" height="11" viewBox="0 0 12 12">
+              <path d="M2.5 6.5 5 9l4.5-5" stroke="white" strokeWidth="2" fill="none" strokeLinecap="round" />
+            </svg>
+          )}
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => onStatusChange(task.id, nextStatus[task.status])}
+          aria-label={`Mark as ${nextStatus[task.status].replace('_', ' ')}`}
+          style={{
+            width: 18,
+            height: 18,
+            borderRadius: 5,
+            border: done ? 'none' : '1.5px solid var(--line-strong)',
+            background: done ? 'var(--done)' : 'transparent',
+            marginTop: 2,
+            flexShrink: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+          }}
+        >
+          {done ? (
+            <svg width="11" height="11" viewBox="0 0 12 12">
+              <path d="M2.5 6.5 5 9l4.5-5" stroke="white" strokeWidth="2" fill="none" strokeLinecap="round" />
+            </svg>
+          ) : inProgress ? (
+            <div style={{ width: 7, height: 7, borderRadius: 999, background: 'var(--violet)' }} />
+          ) : null}
+        </button>
+      )}
 
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
