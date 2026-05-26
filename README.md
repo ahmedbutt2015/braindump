@@ -29,7 +29,7 @@ Most note apps just store what you write. BrainDump is context-aware — when yo
 | UI | shadcn/ui + Tailwind CSS v4 | Built on Radix UI primitives |
 | Data fetching | SWR | Optimistic updates, auto-revalidation |
 | Backend | Next.js API Routes | Same repo, deployed as Vercel serverless functions — no Express, no separate server |
-| AI | Hugging Face `mistralai/Mistral-7B-Instruct-v0.3` | Free tier, direct API call, JSON parsed + Zod validated |
+| AI | Hugging Face `deepseek-ai/DeepSeek-V3-0324` | Free tier, direct API call via HF router, JSON parsed + Zod validated |
 | Database | Supabase (PostgreSQL) | Accessed via `@supabase/ssr` |
 | Auth | Supabase Auth | JWT-based, cookie refresh on every request via middleware |
 | Voice | Web Speech API (browser-native, free) | Falls back to Hugging Face Whisper-large-v3 (free tier, ~20s cold starts) |
@@ -62,7 +62,7 @@ tasks
 ```env
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
-HUGGINGFACE_API_TOKEN=   # required — used for both task extraction (Mistral-7B) and voice transcription (Whisper)
+HUGGINGFACE_API_TOKEN=   # required — used for both task extraction (DeepSeek-V3) and voice transcription (Whisper)
 ```
 
 For local development, put these in `.env.local` and restart `npm run dev`.
@@ -126,12 +126,12 @@ npm run dev
 ### Brain Dump Core
 - [x] Brain dump textarea input
 - [x] Save dump to `brain_dumps` table
-- [x] AI task extraction (GPT-4o-mini) with context from previous 5 dumps
+- [x] AI task extraction (DeepSeek-V3) with context from previous 5 dumps + 15 pending tasks
 - [x] AI avoids duplicating existing pending tasks
 - [x] Tasks saved to `brain_dumps` table linked to the dump
-- [ ] **Smart task linking** — when new dump references something already in tasks, update/enrich existing task instead of (or alongside) creating a new one
+- [x] **Smart task linking** — enrichments + subtask_additions applied when new dump references existing tasks
+- [x] Delete a brain dump (cascade delete its tasks, optimistic UI)
 - [ ] Edit a saved brain dump
-- [ ] Delete a brain dump (cascade delete its tasks)
 
 ### Tasks
 - [x] Task list with status sections (To Do / In Progress / Done)
@@ -139,11 +139,13 @@ npm run dev
 - [x] Status cycling: pending → in_progress → completed → pending
 - [x] Optimistic UI updates via SWR
 - [x] Delete task
-- [ ] Edit task (title, description, priority, due date)
-- [ ] Filter tasks by status or priority
-- [ ] Search tasks
-- [ ] Task detail view — show which dump created it and related dumps
-- [ ] Bulk actions (complete all, delete completed)
+- [x] Edit task (title, description, priority, due date, subtasks, notes, schedule, tags) via detail panel
+- [x] Filter tasks by status or priority
+- [x] Sort tasks by newest / due date / priority
+- [x] Search tasks (⌘K)
+- [x] Task detail view — source note + tasks per note in Notes view
+- [x] Bulk actions (mark complete, delete selected)
+- [x] Export tasks (CSV / JSON)
 - [ ] Due date reminder / notification
 
 ### Voice Input
@@ -171,8 +173,9 @@ npm run dev
 - [ ] Empty state illustrations
 
 ### Infrastructure
-- [ ] Verify Supabase RLS policies on `brain_dumps` and `tasks` (user can only see own data)
-- [ ] Add `updated_at` trigger in Supabase for `tasks`
-- [ ] Rate limiting on `/api/extract-tasks` and `/api/transcribe`
-- [ ] Error boundary on dashboard
-- [ ] Loading skeletons instead of spinner for initial data
+- [x] Supabase RLS policies on `brain_dumps` and `tasks` (migration 002)
+- [x] `updated_at` trigger in Supabase for `tasks` (migration 002)
+- [x] Rate limiting on `/api/extract-tasks` (20/hr DB-backed) and `/api/transcribe` (30/hr in-memory)
+- [x] Error boundary on dashboard
+- [x] Loading skeletons for initial task list load
+- [ ] Loading skeletons for dumps sidebar
