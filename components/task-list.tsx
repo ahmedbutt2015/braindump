@@ -49,13 +49,20 @@ const nextStatus: Record<Task['status'], Task['status']> = {
 export function TaskList({ tasks, onStatusChange, onDelete, onOpen, isLoading }: TaskListProps) {
   if (isLoading) {
     return (
-      <div className="card" style={{ padding: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '28px 0' }}>
-          <svg className="animate-spin" width="22" height="22" fill="none" viewBox="0 0 24 24" style={{ color: 'var(--violet)' }}>
-            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25" />
-            <path fill="currentColor" opacity="0.75" d="M4 12a8 8 0 0 1 8-8V0C5.37 0 0 5.37 0 12h4Z" />
-          </svg>
-        </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {[72, 55, 80, 63].map((w, i) => (
+          <div key={i} className="card" style={{ padding: 12, display: 'flex', gap: 12, alignItems: 'center' }}>
+            <div className="animate-pulse" style={{ width: 18, height: 18, borderRadius: 5, background: 'var(--surface-2)', flexShrink: 0 }} />
+            <div style={{ flex: 1 }}>
+              <div className="animate-pulse" style={{ height: 13, borderRadius: 4, background: 'var(--surface-2)', width: `${w}%` }} />
+              <div className="animate-pulse" style={{ height: 11, borderRadius: 4, background: 'var(--surface-2)', width: '38%', marginTop: 7 }} />
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+              <div className="animate-pulse" style={{ width: 36, height: 20, borderRadius: 999, background: 'var(--surface-2)' }} />
+              <div className="animate-pulse" style={{ width: 28, height: 28, borderRadius: 10, background: 'var(--surface-2)' }} />
+            </div>
+          </div>
+        ))}
       </div>
     )
   }
