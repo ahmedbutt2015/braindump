@@ -976,6 +976,109 @@ function TaskFilterBar({
   )
 }
 
+function ExportMenu() {
+  const [open, setOpen] = useState(false)
+
+  const download = (fmt: 'csv' | 'json') => {
+    const a = document.createElement('a')
+    a.href = `/api/tasks/export?format=${fmt}`
+    a.click()
+    setOpen(false)
+  }
+
+  return (
+    <div style={{ position: 'relative', flexShrink: 0 }}>
+      <button
+        type="button"
+        className="btn sm"
+        onClick={() => setOpen(o => !o)}
+        style={{ display: 'flex', alignItems: 'center', gap: 5 }}
+      >
+        <svg width="13" height="13" fill="none" viewBox="0 0 14 14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M7 1v8M4 6l3 3 3-3M2 11h10" />
+        </svg>
+        Export
+      </button>
+      {open && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 9 }} onClick={() => setOpen(false)} />
+          <div className="card" style={{ position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 10, padding: 4, minWidth: 100 }}>
+            {(['csv', 'json'] as const).map(fmt => (
+              <button
+                key={fmt}
+                type="button"
+                onClick={() => download(fmt)}
+                style={{
+                  display: 'block', width: '100%', padding: '7px 10px',
+                  textAlign: 'left', fontSize: 13, color: 'var(--ink)',
+                  background: 'transparent', border: 'none',
+                  borderRadius: 'var(--r-sm)', cursor: 'pointer',
+                }}
+              >
+                {fmt.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function BulkActionsBar({
+  count,
+  total,
+  isLoading,
+  onSelectAll,
+  onClear,
+  onComplete,
+  onDelete,
+}: {
+  count: number
+  total: number
+  isLoading: boolean
+  onSelectAll: () => void
+  onClear: () => void
+  onComplete: () => Promise<void>
+  onDelete: () => Promise<void>
+}) {
+  return (
+    <div
+      className="card"
+      style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '10px 14px', marginBottom: 8, flexWrap: 'wrap',
+        background: 'color-mix(in oklch, var(--violet) 8%, var(--surface))',
+        borderColor: 'color-mix(in oklch, var(--violet) 25%, var(--line))',
+      }}
+    >
+      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--violet)', flex: 1 }}>
+        {count} selected
+      </span>
+      {count < total && (
+        <button type="button" className="btn sm ghost" onClick={onSelectAll} disabled={isLoading}>
+          Select all {total}
+        </button>
+      )}
+      <button type="button" className="btn sm" onClick={() => void onComplete()} disabled={isLoading}>
+        Mark done
+      </button>
+      <button
+        type="button"
+        className="btn sm"
+        onClick={() => void onDelete()}
+        disabled={isLoading}
+        style={{ color: 'var(--high)', borderColor: 'color-mix(in oklch, var(--high) 30%, var(--line))' }}
+      >
+        Delete
+      </button>
+      <button type="button" className="btn sm ghost" onClick={onClear} disabled={isLoading}>
+        × Cancel
+      </button>
+    </div>
+  )
+}
+
 function TasksPageView({
   tasks,
   onStatusChange,
@@ -992,22 +1095,121 @@ function TasksPageView({
   const [priority, setPriority] = useState<FilterPriority>('all')
   const [status, setStatus] = useState<FilterStatus>('all')
   const [sort, setSort] = useState<SortBy>('newest')
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [isBulkLoading, setIsBulkLoading] = useState(false)
   const filtered = applyFilter(tasks, priority, status, sort)
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const clearSelection = () => {
+    setSelectedIds(new Set())
+    setSelectMode(false)
+  }
+
+  const handleBulkComplete = async () => {
+    const ids = [...selectedIds]
+    if (ids.length === 0) return
+    setIsBulkLoading(true)
+    mutate(
+      'tasks',
+      (cur: Task[] | undefined) => cur?.map(t => ids.includes(t.id) ? { ...t, status: 'completed' as const } : t),
+      false,
+    )
+    clearSelection()
+    try {
+      const res = await fetch('/api/tasks/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, action: 'complete' }),
+      })
+      if (!res.ok) throw new Error()
+      toast.success(`Marked ${ids.length} task${ids.length !== 1 ? 's' : ''} complete`)
+    } catch {
+      toast.error('Failed to update tasks')
+      await mutate('tasks')
+    } finally {
+      setIsBulkLoading(false)
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    const ids = [...selectedIds]
+    if (ids.length === 0) return
+    setIsBulkLoading(true)
+    mutate(
+      'tasks',
+      (cur: Task[] | undefined) => cur?.filter(t => !ids.includes(t.id)),
+      false,
+    )
+    clearSelection()
+    try {
+      const res = await fetch('/api/tasks/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, action: 'delete' }),
+      })
+      if (!res.ok) throw new Error()
+      toast.success(`Deleted ${ids.length} task${ids.length !== 1 ? 's' : ''}`)
+    } catch {
+      toast.error('Failed to delete tasks')
+      await mutate('tasks')
+    } finally {
+      setIsBulkLoading(false)
+    }
+  }
 
   return (
     <div style={{ marginTop: 22 }}>
-      <TaskFilterBar
-        priority={priority} setPriority={setPriority}
-        status={status} setStatus={setStatus}
-        sort={sort} setSort={setSort}
-        total={tasks.length}
-      />
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <TaskFilterBar
+            priority={priority} setPriority={setPriority}
+            status={status} setStatus={setStatus}
+            sort={sort} setSort={setSort}
+            total={tasks.length}
+          />
+        </div>
+        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+          <button
+            type="button"
+            className="btn sm"
+            onClick={() => { setSelectMode(m => !m); setSelectedIds(new Set()) }}
+            style={selectMode ? { background: 'var(--violet)', color: 'var(--bg)', borderColor: 'var(--violet)' } : {}}
+          >
+            Select
+          </button>
+          <ExportMenu />
+        </div>
+      </div>
+
+      {selectMode && selectedIds.size > 0 && (
+        <BulkActionsBar
+          count={selectedIds.size}
+          total={filtered.length}
+          isLoading={isBulkLoading}
+          onSelectAll={() => setSelectedIds(new Set(filtered.map(t => t.id)))}
+          onClear={clearSelection}
+          onComplete={handleBulkComplete}
+          onDelete={handleBulkDelete}
+        />
+      )}
+
       <TaskList
         tasks={filtered}
         onStatusChange={onStatusChange}
         onDelete={onDelete}
         onOpen={onOpen}
         isLoading={isLoading}
+        selectedIds={selectMode ? selectedIds : undefined}
+        onToggleSelect={selectMode ? toggleSelect : undefined}
       />
     </div>
   )
