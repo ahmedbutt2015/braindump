@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import useSWR, { mutate } from 'swr'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
@@ -887,7 +887,7 @@ function applyFilter(tasks: Task[], priority: FilterPriority, status: FilterStat
 }
 
 function TaskFilterBar({
-  priority, setPriority, status, setStatus, sort, setSort, total,
+  priority, setPriority, status, setStatus, sort, setSort, tasks,
 }: {
   priority: FilterPriority
   setPriority: (v: FilterPriority) => void
@@ -895,9 +895,32 @@ function TaskFilterBar({
   setStatus: (v: FilterStatus) => void
   sort: SortBy
   setSort: (v: SortBy) => void
-  total: number
+  tasks: Task[]
 }) {
   const active = priority !== 'all' || status !== 'all' || sort !== 'newest'
+
+  // Priority chip counts: respect current status filter but ignore priority filter
+  const priorityCounts = useMemo(() => {
+    const base = status === 'all' ? tasks : tasks.filter(t => t.status === status)
+    return {
+      all: base.length,
+      high: base.filter(t => t.priority === 'high').length,
+      medium: base.filter(t => t.priority === 'medium').length,
+      low: base.filter(t => t.priority === 'low').length,
+    }
+  }, [tasks, status])
+
+  // Status chip counts: respect current priority filter but ignore status filter
+  const statusCounts = useMemo(() => {
+    const base = priority === 'all' ? tasks : tasks.filter(t => t.priority === priority)
+    return {
+      all: base.length,
+      pending: base.filter(t => t.status === 'pending').length,
+      in_progress: base.filter(t => t.status === 'in_progress').length,
+      completed: base.filter(t => t.status === 'completed').length,
+    }
+  }, [tasks, priority])
+
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
       <div style={{ display: 'flex', gap: 4 }}>
@@ -914,7 +937,15 @@ function TaskFilterBar({
               borderColor: priority === p ? 'var(--ink)' : 'var(--line)',
             }}
           >
-            {p === 'all' ? `All · ${total}` : p}
+            {p === 'all' ? 'All' : p}
+            <span style={{
+              marginLeft: 4,
+              opacity: 0.65,
+              fontSize: '0.85em',
+              fontVariantNumeric: 'tabular-nums',
+            }}>
+              {priorityCounts[p]}
+            </span>
           </button>
         ))}
       </div>
@@ -937,6 +968,15 @@ function TaskFilterBar({
             }}
           >
             {label}
+            <span style={{
+              marginLeft: 4,
+              opacity: 0.65,
+              fontSize: '0.85em',
+              fontVariantNumeric: 'tabular-nums',
+              fontWeight: 400,
+            }}>
+              {statusCounts[s as keyof typeof statusCounts]}
+            </span>
           </button>
         ))}
       </div>
@@ -1174,7 +1214,7 @@ function TasksPageView({
             priority={priority} setPriority={setPriority}
             status={status} setStatus={setStatus}
             sort={sort} setSort={setSort}
-            total={tasks.length}
+            tasks={tasks}
           />
         </div>
         <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
