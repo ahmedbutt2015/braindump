@@ -136,8 +136,8 @@ export function DashboardContent({ initialTasks, initialDumps, userId, userEmail
 
   const [dumpsLimit, setDumpsLimit] = useState(DUMPS_PAGE_SIZE)
 
-  const fetchTasks = makeFetchTasks(userId)
-  const fetchDumps = makeFetchDumps(userId)
+  const fetchTasks = useMemo(() => makeFetchTasks(userId), [userId])
+  const fetchDumps = useMemo(() => makeFetchDumps(userId), [userId])
 
   const { data: tasks = initialTasks, isLoading: tasksLoading } = useSWR(
     'tasks',

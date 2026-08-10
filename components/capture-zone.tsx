@@ -1096,7 +1096,7 @@ function shorten(value: string) {
   return `${value.slice(0, 31).trim()}...`
 }
 
-function priorityColor(priority: 'low' | 'medium' | 'high') {
+function priorityColor(priority?: 'low' | 'medium' | 'high') {
   if (priority === 'high') return 'var(--high)'
   if (priority === 'medium') return 'var(--med)'
   return 'var(--low)'
