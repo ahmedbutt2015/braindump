@@ -16,10 +16,12 @@ export default async function DashboardPage() {
     supabase
       .from('tasks')
       .select('*')
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false }),
     supabase
       .from('brain_dumps')
       .select('*')
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false })
   ])
 
@@ -28,6 +30,7 @@ export default async function DashboardPage() {
       <DashboardContent
         initialTasks={tasks || []}
         initialDumps={dumps || []}
+        userId={user.id}
         userEmail={user.email}
       />
     </ErrorBoundary>

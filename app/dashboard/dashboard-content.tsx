@@ -29,6 +29,7 @@ const DUMPS_PAGE_SIZE = 20
 interface DashboardContentProps {
   initialTasks: Task[]
   initialDumps: BrainDump[]
+  userId: string
   userEmail?: string
 }
 
@@ -46,26 +47,32 @@ interface ExtractTasksApiResponse {
 
 const supabase = createClient()
 
-async function fetchTasks(): Promise<Task[]> {
-  const { data, error } = await supabase
-    .from('tasks')
-    .select('*')
-    .order('created_at', { ascending: false })
-  if (error) throw error
-  return data || []
+function makeFetchTasks(userId: string) {
+  return async function fetchTasks(): Promise<Task[]> {
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return data || []
+  }
 }
 
-async function fetchDumps(limit: number): Promise<BrainDump[]> {
-  const { data, error } = await supabase
-    .from('brain_dumps')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(limit)
-  if (error) throw error
-  return data || []
+function makeFetchDumps(userId: string) {
+  return async function fetchDumps(limit: number): Promise<BrainDump[]> {
+    const { data, error } = await supabase
+      .from('brain_dumps')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit)
+    if (error) throw error
+    return data || []
+  }
 }
 
-export function DashboardContent({ initialTasks, initialDumps, userEmail }: DashboardContentProps) {
+export function DashboardContent({ initialTasks, initialDumps, userId, userEmail }: DashboardContentProps) {
   const [isProcessing, setIsProcessing] = useState(false)
   const [isDark, setIsDark] = useState(false)
   const [tutorialDismissed, setTutorialDismissed] = useState(false)
@@ -128,6 +135,9 @@ export function DashboardContent({ initialTasks, initialDumps, userEmail }: Dash
   }
 
   const [dumpsLimit, setDumpsLimit] = useState(DUMPS_PAGE_SIZE)
+
+  const fetchTasks = makeFetchTasks(userId)
+  const fetchDumps = makeFetchDumps(userId)
 
   const { data: tasks = initialTasks, isLoading: tasksLoading } = useSWR(
     'tasks',
@@ -204,8 +214,12 @@ export function DashboardContent({ initialTasks, initialDumps, userEmail }: Dash
       .from('tasks')
       .update({ status, updated_at: new Date().toISOString() })
       .eq('id', taskId)
-    if (error) mutate('tasks')
-  }, [])
+      .eq('user_id', userId)
+    if (error) {
+      mutate('tasks')
+      toast.error('Failed to update task status.')
+    }
+  }, [userId])
 
   const handleDelete = useCallback(async (taskId: string) => {
     mutate(
@@ -213,9 +227,12 @@ export function DashboardContent({ initialTasks, initialDumps, userEmail }: Dash
       (current: Task[] | undefined) => current?.filter(task => task.id !== taskId),
       false,
     )
-    const { error } = await supabase.from('tasks').delete().eq('id', taskId)
-    if (error) mutate('tasks')
-  }, [])
+    const { error } = await supabase.from('tasks').delete().eq('id', taskId).eq('user_id', userId)
+    if (error) {
+      mutate('tasks')
+      toast.error('Failed to delete task.')
+    }
+  }, [userId])
 
   const handleDumpDelete = useCallback(async (dumpId: string) => {
     mutate(
