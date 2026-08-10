@@ -138,6 +138,7 @@ export async function POST(request: Request) {
       supabase
         .from('brain_dumps')
         .select('content, created_at')
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(5),
       supabase
@@ -333,6 +334,7 @@ export async function POST(request: Request) {
         .eq('user_id', user.id)
 
       if (!enrichError) enrichmentsApplied++
+      else console.warn('[extract-tasks] Failed to apply enrichment', { requestId, taskId: enrichment.task_id, enrichError })
     }
 
     // Apply subtask additions — append new subtasks to existing tasks
@@ -361,6 +363,7 @@ export async function POST(request: Request) {
         .eq('user_id', user.id)
 
       if (!subtaskError) subtaskAdditions++
+      else console.warn('[extract-tasks] Failed to add subtask', { requestId, taskId: addition.task_id, subtaskError })
     }
 
     // Log the API call — awaited so Vercel doesn't drop it before the function terminates
