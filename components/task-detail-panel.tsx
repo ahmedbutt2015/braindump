@@ -64,13 +64,15 @@ export function TaskDetailPanel({ task, onClose, onDelete }: TaskDetailPanelProp
     setDumpExpanded(false)
 
     if (task.brain_dump_id) {
-      supabase
+      void supabase
         .from('brain_dumps')
         .select('id, content, created_at')
         .eq('id', task.brain_dump_id)
         .single()
-        .then(({ data }) => { if (data) setSourceDump(data) })
-        .catch(() => { /* source dump is cosmetic — ignore fetch errors */ })
+        .then(
+          ({ data }) => { if (data) setSourceDump(data) },
+          () => { /* source dump is cosmetic — ignore fetch errors */ },
+        )
     }
   }, [task?.id])
 
