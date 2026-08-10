@@ -30,12 +30,15 @@ export function BrainMascot({
   className,
   style,
 }: BrainMascotProps) {
+  const [mounted, setMounted] = useState(false)
   const [t, setT] = useState(0)
   const [blinkPhase, setBlinkPhase] = useState(1)
   const [lookAt, setLookAt] = useState<[number, number]>([0, 0])
   const startedAt = useRef<number>(0)
   const audioRef = useRef(0)
   const peaksRef = useRef<number[]>(Array(bars).fill(0))
+
+  useEffect(() => { setMounted(true) }, [])
 
   // Animation loop
   useEffect(() => {
@@ -142,12 +145,12 @@ export function BrainMascot({
       <div style={{
         position: 'absolute', inset: '14% 8% 4% 8%', borderRadius: '50%',
         background: color, filter: 'blur(34px)',
-        opacity: isListening ? 0.42 + audioVal * 0.25 : isHappy ? 0.28 : isThinking ? 0.22 : 0.14,
+        opacity: mounted ? (isListening ? 0.42 + audioVal * 0.25 : isHappy ? 0.28 : isThinking ? 0.22 : 0.14) : 0.14,
         transition: 'opacity .25s', pointerEvents: 'none',
       }} />
 
-      {/* Halo rings */}
-      {showHalo && (isListening || isHappy) && [0, 1, 2].map(i => {
+      {/* Halo rings — client-only: phase uses live time, SSR would mismatch */}
+      {mounted && showHalo && (isListening || isHappy) && [0, 1, 2].map(i => {
         const phase = (t * (isListening ? 0.85 : 0.55) + i * 0.55) % 1.6
         return (
           <div key={i} style={{
@@ -160,8 +163,8 @@ export function BrainMascot({
         )
       })}
 
-      {/* Audio bars ring (listening only) */}
-      {showHalo && isListening && (
+      {/* Audio bars ring — client-only: float coords from peaks differ server vs client */}
+      {mounted && showHalo && isListening && (
         <svg viewBox={`0 0 ${VB} ${VB}`} width="100%" height="100%"
           style={{ position: 'absolute', inset: 0, overflow: 'visible', pointerEvents: 'none' }}>
           {Array.from({ length: bars }).map((_, i) => {
@@ -180,8 +183,8 @@ export function BrainMascot({
         </svg>
       )}
 
-      {/* Orbiting neural sparkles */}
-      {(isListening || isThinking) && (
+      {/* Orbiting neural sparkles — client-only: coords are time-driven, SSR would mismatch */}
+      {mounted && (isListening || isThinking) && (
         <svg viewBox={`0 0 ${VB} ${VB}`} width="100%" height="100%"
           style={{ position: 'absolute', inset: 0, overflow: 'visible', pointerEvents: 'none' }}>
           {Array.from({ length: 5 }).map((_, i) => {
@@ -208,7 +211,7 @@ export function BrainMascot({
       {/* Head SVG */}
       <svg viewBox={`0 0 ${VB} ${VB}`} width="100%" height="100%" style={{
         position: 'absolute', inset: 0, overflow: 'visible',
-        transform: `translateY(${nod.toFixed(2)}px) rotate(${tilt.toFixed(2)}deg)`,
+        transform: mounted ? `translateY(${nod.toFixed(2)}px) rotate(${tilt.toFixed(2)}deg)` : undefined,
         transformOrigin: '50% 75%',
       }}>
         <defs>
@@ -228,7 +231,7 @@ export function BrainMascot({
         </defs>
 
         <g style={{
-          transform: `scale(${stretchX.toFixed(3)}, ${stretchY.toFixed(3)}) skewX(${(wobble * 6).toFixed(2)}deg)`,
+          transform: mounted ? `scale(${stretchX.toFixed(3)}, ${stretchY.toFixed(3)}) skewX(${(wobble * 6).toFixed(2)}deg)` : undefined,
           transformOrigin: `${cx}px ${cy + 20}px`,
         }}>
           <path d={BRAIN_SHAPE} fill="url(#bm-fill)" stroke="var(--ink)" strokeWidth="1.6" strokeLinejoin="round" />
