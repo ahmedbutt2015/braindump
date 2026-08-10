@@ -262,20 +262,18 @@ export async function POST(request: Request) {
     if (output.subtask_additions.length > 0 || output.enrichments.length > 0) {
       const coveredWords = new Set<string>()
       const STOP_WORDS = new Set(['the', 'and', 'for', 'with', 'that', 'this', 'from', 'into', 'also', 'just', 'then'])
+      const tokenize = (text: string) =>
+        text.toLowerCase().split(/[\s\-\/]+/).map(w => w.replace(/[^a-z0-9]/g, '')).filter(w => w.length > 3 && !STOP_WORDS.has(w))
 
       for (const s of output.subtask_additions) {
-        s.subtask_title!.toLowerCase().split(/\s+/).forEach(w => {
-          if (w.length > 3 && !STOP_WORDS.has(w)) coveredWords.add(w)
-        })
+        tokenize(s.subtask_title!).forEach(w => coveredWords.add(w))
       }
       for (const e of output.enrichments) {
-        e.additional_context!.toLowerCase().split(/\s+/).forEach(w => {
-          if (w.length > 3 && !STOP_WORDS.has(w)) coveredWords.add(w)
-        })
+        tokenize(e.additional_context!).forEach(w => coveredWords.add(w))
       }
 
       output.tasks = output.tasks.filter(task => {
-        const titleWords = task.title.toLowerCase().split(/\s+/).filter(w => w.length > 3 && !STOP_WORDS.has(w))
+        const titleWords = tokenize(task.title)
         const overlap = titleWords.filter(w => coveredWords.has(w)).length
         return overlap < 2
       })
