@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { getHuggingFaceToken, maskSecret, serializeError } from '@/lib/huggingface'
 import { checkDumpRateLimit } from '@/lib/rate-limit'
+import { embedQuery, embedTaskBatch, toVectorLiteral } from '@/lib/embeddings'
 import { z } from 'zod'
 
 const HF_MODEL = 'deepseek-ai/DeepSeek-V3-0324:novita'
@@ -69,28 +70,30 @@ Required JSON format:
   "summary": "one sentence describing what was processed"
 }
 
-DECISION RULES — apply strictly in order:
+STEP 1 — INVENTORY: Read the entire dump and list every distinct actionable item before deciding what to do with any of them. Do not skip items.
 
-1. MATCH EXISTING FIRST: Before creating any new task, check if the dump content is already covered by an existing task.
-   → If YES: use "enrichments" (for new context/info) or "subtask_additions" (for new action steps) on that task.
-   → CRITICAL: If you add an enrichment or subtask_addition for some content, do NOT also create a new task for that same content. One action per piece of content — never both.
+STEP 2 — CLASSIFY each item using these rules in order:
 
-2. NEW TASK: Only create a new task if the content has absolutely no existing task to attach to.
-   → Title must be a specific action, not a vague concept. Bad: "Consider career". Good: "Research software dev bootcamps".
-   → Carry context into the description — don't leave it empty if the dump has useful detail.
-   → Description must match the title — don't put unrelated content in the description.
+A. ENRICHMENT: The item is new information, an update, or context about an existing task (a date change, a new contact detail, a status update). Use "enrichments". Do not also create a new task for the same content.
 
-3. NEGATIVE STATEMENTS ARE NOT TASKS: If the user says they do NOT want something, that is a preference, not a task.
-   → "I don't want to work at a warehouse" → NOT a task. Attach it as an enrichment constraint to a relevant existing task.
-   → "I'm not ready for X yet" → NOT a task. Context only.
+B. SUBTASK: The item is a direct action step required to complete an existing task — meaning it only makes sense as part of that parent task and has no independent value. Use "subtask_additions".
+   → "Ask Sarah to review the resume before sending" IS a subtask of "Update resume" — it only matters in that context.
+   → "Prepare for CyberX interview" is NOT a subtask of "Follow up with Jake" — it is substantial independent work.
+   → "Write a cover letter for CyberX" is NOT a subtask of any follow-up task — it stands alone.
+   → When in doubt: if the item could appear on its own on a to-do list and make sense without the parent, make it a new task.
 
-4. NOTHING ACTIONABLE: Return empty arrays for all three fields.
+C. NEW TASK: Everything else. Create a new task if:
+   - The item has no existing task to attach to, OR
+   - The item is substantial standalone work, even if loosely related to an existing task.
+   → Title must be a specific action: verb + object. Bad: "CyberX stuff". Good: "Prepare for CyberX technical interview".
+   → Put useful context in the description. Never leave it empty if the dump contains relevant detail.
 
-Key distinctions:
-- "enrichments" = new context, constraints, people met, updates (appended to description)
-- "subtask_additions" = a new specific action step that belongs under an existing task
-- "tasks" = genuinely new work with absolutely no existing home
+D. NOT A TASK: Negative statements ("I don't want X"), preferences, or pure observations with nothing to do.
+   → Attach as an enrichment constraint if related to an existing task, otherwise discard.
 
+STEP 3 — OUTPUT: Every item from Step 1 must appear in exactly one of: tasks, enrichments, subtask_additions, or be explicitly discarded as non-actionable. Nothing may be silently dropped.
+
+CRITICAL: One action per item — never both a new task AND an enrichment/subtask for the same content.
 Use the exact task_id UUID from the provided list. Never fabricate or guess a UUID.`
 }
 
@@ -133,22 +136,70 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Content is required' }, { status: 400 })
     }
 
-    // Fetch recent dumps + existing pending tasks (with subtasks so we can append to them)
-    const [{ data: recentDumps }, { data: existingTasks }] = await Promise.all([
+    // Fetch recent dumps and attempt to embed the dump in parallel.
+    // Embedding requires api-inference.huggingface.co (reachable on Vercel, may fail locally).
+    const [{ data: recentDumps }, dumpEmbedding] = await Promise.all([
       supabase
         .from('brain_dumps')
         .select('content, created_at')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(5),
-      supabase
+      embedQuery(content).catch(() => null),
+    ])
+
+    // Three-tier retrieval — fills up to 15 tasks in priority order:
+    //   Tier 1 · Vector search   — cosine similarity (production: Vercel can reach HF embed API)
+    //   Tier 2 · Keyword FTS     — PostgreSQL tsvector/tsquery (works everywhere, no external API)
+    //   Tier 3 · Recency         — newest tasks (baseline, always works, original behaviour)
+    // Each tier supplements the previous; seen-set deduplicates across tiers.
+    type TaskContext = { id: string; title: string; description: string | null; subtasks: unknown }
+    const existingTasks: TaskContext[] = []
+    const seen = new Set<string>()
+    const fill = (rows: TaskContext[]) => {
+      for (const t of rows) {
+        if (existingTasks.length >= 15) break
+        if (!seen.has(t.id)) { existingTasks.push(t); seen.add(t.id) }
+      }
+    }
+
+    // Tier 1 — vector cosine search
+    if (dumpEmbedding) {
+      const { data: semantic, error: semanticErr } = await supabase.rpc('match_tasks', {
+        query_embedding: toVectorLiteral(dumpEmbedding),
+        user_id_param: user.id,
+        match_count: 15,
+      })
+      if (!semanticErr) fill((semantic ?? []) as TaskContext[])
+    }
+
+    // Tier 2 — keyword FTS (fills remaining slots after vector search, or all slots if no embedding)
+    if (existingTasks.length < 15) {
+      const { data: fts } = await supabase.rpc('match_tasks_fts', {
+        query_text: content.substring(0, 1000),
+        user_id_param: user.id,
+        match_count: 15,
+      })
+      fill((fts ?? []) as TaskContext[])
+    }
+
+    // Tier 3 — recency (catches tasks with no keyword overlap, always-on safety net)
+    if (existingTasks.length < 15) {
+      const { data: recent } = await supabase
         .from('tasks')
-        .select('id, title, description, status, subtasks')
+        .select('id, title, description, subtasks')
         .eq('user_id', user.id)
         .eq('status', 'pending')
         .order('created_at', { ascending: false })
-        .limit(15),
-    ])
+        .limit(15)
+      fill((recent ?? []) as TaskContext[])
+    }
+
+    console.info('[extract-tasks] Task retrieval', {
+      requestId,
+      tier1Vector: dumpEmbedding ? 'yes' : 'no',
+      totalRetrieved: existingTasks.length,
+    })
 
     const previousContext = recentDumps?.length
       ? `Recent brain dumps for context:\n${recentDumps.map(d => `- ${d.content.substring(0, 200)}`).join('\n')}`
@@ -279,24 +330,29 @@ export async function POST(request: Request) {
       })
     }
 
-    // Save the brain dump
-    const { data: brainDump, error: dumpError } = await supabase
-      .from('brain_dumps')
-      .insert({ user_id: user.id, content })
-      .select()
-      .single()
+    // Embed new tasks and save brain dump in parallel (both are independent at this point)
+    const [taskEmbeddings, { data: brainDump, error: dumpError }] = await Promise.all([
+      output.tasks.length > 0
+        ? embedTaskBatch(output.tasks.map(t => ({ title: t.title, description: t.description ?? null })))
+        : Promise.resolve([] as Array<number[] | null>),
+      supabase
+        .from('brain_dumps')
+        .insert({ user_id: user.id, content })
+        .select()
+        .single(),
+    ])
 
     if (dumpError) {
       console.error('[extract-tasks] Error saving brain dump', { requestId, dumpError })
       return Response.json({ error: 'Failed to save brain dump' }, { status: 500 })
     }
 
-    // Save new tasks
+    // Save new tasks — include embeddings so they are immediately searchable
     if (output.tasks.length > 0) {
       const { error: tasksError } = await supabase
         .from('tasks')
         .insert(
-          output.tasks.map(task => ({
+          output.tasks.map((task, i) => ({
             user_id: user.id,
             brain_dump_id: brainDump.id,
             title: task.title,
@@ -304,6 +360,7 @@ export async function POST(request: Request) {
             priority: task.priority,
             due_date: task.due_date ?? null,
             status: 'pending' as const,
+            embedding: taskEmbeddings[i] ? toVectorLiteral(taskEmbeddings[i]!) : null,
           }))
         )
 
