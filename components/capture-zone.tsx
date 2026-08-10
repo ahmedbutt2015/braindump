@@ -85,6 +85,7 @@ export function CaptureZone({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
   const accumulatedRef = useRef('')
+  const interimRef = useRef('')
   const cancelFallbackRef = useRef(false)
   const happyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const prevProcessingRef = useRef(false)
@@ -137,7 +138,12 @@ export function CaptureZone({
       setLiveTranscript(accumulatedRef.current)
     },
     onError: (message) => {
-      if (message.includes('not supported') || message.includes('denied') || message.includes('not-allowed')) {
+      if (
+        message.includes('not supported') ||
+        message.includes('denied') ||
+        message.includes('not-allowed') ||
+        message.includes('internet access')
+      ) {
         setIsFallback(true)
       }
       setError(message)
@@ -146,6 +152,8 @@ export function CaptureZone({
 
   const activeRecording = isListening || isFallbackRecording
   const displayText = [liveTranscript, interimTranscript].filter(Boolean).join(' ').trim()
+  // Keep interimRef current so stopAndExtract always reads the latest interim without stale closure
+  interimRef.current = interimTranscript
 
   useEffect(() => {
     if (transcriptScrollRef.current) {
@@ -196,6 +204,7 @@ export function CaptureZone({
 
   const resetCaptureState = useCallback(() => {
     accumulatedRef.current = ''
+    interimRef.current = ''
     setLiveTranscript('')
     setIsPaused(false)
     setError(null)
@@ -312,12 +321,15 @@ export function CaptureZone({
   }, [isFallbackRecording, isListening, isMobile, resetCaptureState, stopFallbackRecording, stopListening])
 
   const stopAndExtract = useCallback(async () => {
-    const transcript = displayText
-
     if (isFallbackRecording) {
       stopFallbackRecording(false)
       return
     }
+
+    // Read from refs so we always get the current value regardless of render timing.
+    // interimRef captures any in-flight partial speech not yet finalised by the engine.
+    const interim = interimRef.current
+    const transcript = (accumulatedRef.current + (interim ? ` ${interim}` : '')).trim()
 
     if (isListening) stopListening()
     setIsPaused(false)
@@ -330,7 +342,7 @@ export function CaptureZone({
       setError('Say a little more and try again.')
       if (isMobile) setMobileStage('idle')
     }
-  }, [displayText, doSubmit, isFallbackRecording, isListening, isMobile, stopFallbackRecording, stopListening])
+  }, [doSubmit, isFallbackRecording, isListening, isMobile, stopFallbackRecording, stopListening])
 
   const handleTextSubmit = async (event: FormEvent) => {
     event.preventDefault()

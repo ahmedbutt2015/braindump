@@ -98,6 +98,8 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
   // Tracks whether the user intends to keep listening (for Safari continuous simulation)
   const shouldContinueRef = useRef(false)
+  // Always-current ref to createAndStartRecognition (avoids stale closure in onend)
+  const createAndStartRef = useRef<() => void>(() => {})
 
   useEffect(() => {
     setState(prev => ({ ...prev, isSupported: !!getSpeechRecognition() }))
@@ -171,6 +173,8 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
           ? 'Microphone access denied. Please allow microphone access.'
           : event.error === 'no-speech'
           ? 'No speech detected. Please try again.'
+          : event.error === 'network'
+          ? 'Speech recognition needs internet access. Switching to audio recording.'
           : `Speech recognition error: ${event.error}`
 
       setState(prev => ({ ...prev, error: errorMessage, isListening: false }))
@@ -179,10 +183,11 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
 
     recognition.onend = () => {
       // On Safari with continuous requested: restart automatically while the user
-      // hasn't explicitly stopped. This simulates the continuous mode that Safari lacks.
+      // hasn't explicitly stopped. Must create a fresh instance — calling start()
+      // on the ended instance throws InvalidStateError on Safari.
       if (safari && continuous && shouldContinueRef.current) {
         try {
-          recognition.start()
+          createAndStartRef.current()
           return
         } catch {
           // If restart fails, fall through to stop
@@ -198,6 +203,11 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
       onError?.('Failed to start speech recognition')
     }
   }, [continuous, interimResults, language, onResult, onError])
+
+  // Keep the restart ref current so the onend closure always calls the latest version
+  useEffect(() => {
+    createAndStartRef.current = createAndStartRecognition
+  }, [createAndStartRecognition])
 
   const startListening = useCallback(() => {
     const SpeechRecognition = getSpeechRecognition()
