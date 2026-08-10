@@ -54,7 +54,7 @@ export function TaskDetailPanel({ task, onClose, onDelete }: TaskDetailPanelProp
     setDescription(task.description ?? '')
     setPriority(task.priority)
     setStatus(task.status)
-    setDueDate(task.due_date ? task.due_date.split('T')[0] : '')
+    setDueDate(task.due_date ? task.due_date.substring(0, 10) : '')
     setNotes(task.notes ?? '')
     setScheduleType(task.schedule_type ?? 'none')
     setScheduledDate(task.scheduled_date ?? '')
@@ -70,6 +70,7 @@ export function TaskDetailPanel({ task, onClose, onDelete }: TaskDetailPanelProp
         .eq('id', task.brain_dump_id)
         .single()
         .then(({ data }) => { if (data) setSourceDump(data) })
+        .catch(() => { /* source dump is cosmetic — ignore fetch errors */ })
     }
   }, [task?.id])
 
