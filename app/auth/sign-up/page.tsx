@@ -35,19 +35,22 @@ export default function SignUpPage() {
     }
 
     const supabase = createClient()
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL ?? 
-          `${window.location.origin}/auth/callback`,
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     })
 
     if (error) {
       setError(error.message)
       setLoading(false)
+    } else if (data.session) {
+      // Email confirmation is disabled — session granted immediately
+      router.push('/dashboard')
     } else {
+      // Email confirmation is enabled — tell user to check inbox
       router.push('/auth/sign-up-success')
     }
   }
