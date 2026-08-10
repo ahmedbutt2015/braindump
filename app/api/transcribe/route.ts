@@ -55,6 +55,7 @@ export async function POST(request: Request) {
 
     // Convert blob to array buffer
     const audioBuffer = await audioFile.arrayBuffer()
+    const contentType = audioFile.type || 'audio/webm'
 
     console.info('[transcribe] Sending Hugging Face request', {
       requestId,
@@ -62,6 +63,7 @@ export async function POST(request: Request) {
       hfUrl: HUGGINGFACE_API_URL,
       hfHostname: new URL(HUGGINGFACE_API_URL).hostname,
       audioSizeBytes: audioBuffer.byteLength,
+      contentType,
       tokenSource: hfTokenSource,
     })
 
@@ -70,9 +72,15 @@ export async function POST(request: Request) {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${hfToken}`,
-        'Content-Type': 'audio/webm',
+        'Content-Type': contentType,
       },
       body: audioBuffer,
+      signal: AbortSignal.timeout(30000),
+    }).catch(err => {
+      if (err.name === 'AbortError' || err.name === 'TimeoutError') {
+        throw new Error('Transcription request timed out after 30 seconds')
+      }
+      throw err
     })
 
     if (!response.ok) {
