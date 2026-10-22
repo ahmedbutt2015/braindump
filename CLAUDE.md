@@ -171,3 +171,16 @@ NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
 HUGGINGFACE_API_TOKEN   # covers both task extraction (DeepSeek-V3) and voice transcription (Whisper)
 ```
+
+## AI Workflow Rules
+
+These rules govern how AI coding agents work in this repo.
+
+1. **Plan before code.** Start every non-trivial task in plan mode. Review and trim the plan before any file is edited.
+2. **One task per session.** Clear context between tasks. Commit after each task so every session starts from a clean, known state.
+3. **Tests first for guardrails.** Any code that validates model output gets failing tests written before the implementation, including adversarial cases.
+4. **Treat all model output as untrusted.** Anything the LLM returns (IDs, quotes, text) must pass a deterministic check in code before it touches the database. The prompt is a request, not a guarantee.
+5. **Migrations and auth/RLS are human-gated.** The agent may draft SQL, but a human reads it and applies it. The agent never applies migrations or edits auth and RLS policies unreviewed.
+6. **Always await database writes in API routes.** Vercel ends the function when the response returns, and unawaited work is dropped.
+7. **Verify before done.** `npm run typecheck && npm test` must pass before a task is considered complete, and the diff is reviewed by a human.
+8. **Failures become rules.** When the AI makes a mistake, add a rule or a test that blocks that failure class. Do not just fix the one instance.
