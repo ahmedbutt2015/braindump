@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #080512; overflow: hidden; width: 1600px; height: 840px; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c" width="1600" height="840"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const W = 1600, H = 840;
+const CX = 760, CY = 405;
+
+// ── Cerebrum with gyri bumps along the top surface ────────────────────────
+// Side view: frontal lobe at left, occipital at right, temporal below.
+// The top crown has 6 visible gyri bumps.
+function brainOuterPath(cx, cy) {
+  ctx.beginPath();
+  // Start at brainstem (bottom front)
+  ctx.moveTo(cx - 22, cy + 152);
+  // Up the frontal base
+  ctx.bezierCurveTo(cx - 62, cy + 132, cx - 148, cy + 88, cx - 165, cy + 10);
+  // Frontal pole — slight upward bump
+  ctx.bezierCurveTo(cx - 175, cy - 42, cx - 168, cy - 90, cx - 148, cy - 128);
+  // GYRUS 1 (frontal, top-left)
+  ctx.bezierCurveTo(cx - 130, cy - 148, cx - 118, cy - 168, ctx - 100, cy - 175);
+  ctx.bezierCurveTo(cx - 82,  cy - 182, cx - 68,  cy - 168, cx - 58,  cy - 158);
+  // GYRUS 2
+  ctx.bezierCurveTo(cx - 48,  cy - 148, cx - 38,  cy - 168, cx - 18,  cy - 175);
+  ctx.bezierCurveTo(cx + 2,   cy - 182, cx + 15,  cy - 170, cx + 25,  cy - 160);
+  // GYRUS 3
+  ctx.bezierCurveTo(cx + 35,  cy - 150, cx + 50,  cy - 172, cx + 70,  cy - 178);
+  ctx.bezierCurveTo(cx + 90,  cy - 184, cx + 105, cy - 168, cx + 115, cy - 158);
+  // GYRUS 4 (parietal peak)
+  ctx.bezierCurveTo(cx + 125, cy - 148, cx + 138, cy - 162, cx + 155, cy - 162);
+  ctx.bezierCurveTo(cx + 172, cy - 162, cx + 185, cy - 148, cx + 192, cy - 130);
+  // GYRUS 5 (parieto-occipital)
+  ctx.bezierCurveTo(cx + 198, cy - 115, cx + 208, cy - 108, cx + 215, cy - 88);
+  ctx.bezierCurveTo(cx + 222, cy - 68,  cx + 218, cy - 42,  cx + 212, cy - 15);
+  // Occipital lobe
+  ctx.bezierCurveTo(cx + 208, cy + 20,  cx + 198, cy + 55,  cx + 178, cy + 85);
+  ctx.bezierCurveTo(cx + 145, cy + 115, cx + 98,  cy + 128, cx + 52,  cy + 132);
+  // Temporal base
+  ctx.bezierCurveTo(cx + 8,   cy + 135, cx - 24,  cy + 130, cx - 60,  cy + 120);
+  ctx.bezierCurveTo(cx - 104, cy + 110, cx - 120, cy + 93,  cx - 102, cy + 78);
+  ctx.bezierCurveTo(cx - 83,  cy + 63,  cx - 46,  cy + 62,  cx - 30,  cy + 78);
+  // Into brainstem
+  ctx.bezierCurveTo(cx - 13,  cy + 94,  ctx - 5,   cy + 128, cx - 22,  cy + 152);
+  ctx.closePath();
+}
+
+function cerebellumPath(cx, cy) {
+  ctx.beginPath();
+  ctx.moveTo(cx + 52, cy + 132);
+  ctx.bezierCurveTo(cx + 80,  cy + 138, cx + 138, cy + 145, cx + 175, cy + 165);
+  ctx.bezierCurveTo(cx + 210, cy + 185, ctx + 220, cy + 218, cx + 202, cy + 242);
+  ctx.bezierCurveTo(cx + 185, cy + 265, cx + 148, cy + 270, cx + 110, cy + 263);
+  ctx.bezierCurveTo(cx + 74,  cy + 256, cx + 46,  cy + 240, cx + 26,  cy + 218);
+  ctx.bezierCurveTo(cx + 6,   cy + 196, cx + 6,   cy + 170, cx + 22,  cy + 152);
+  ctx.bezierCurveTo(cx + 34,  cy + 140, cx + 44,  cy + 133, cx + 52,  cy + 132);
+  ctx.closePath();
+}
+
+function brainstemPath(cx, cy) {
+  ctx.beginPath();
+  ctx.moveTo(cx - 22, cy + 152);
+  ctx.bezierCurveTo(cx - 24, cy + 180, cx - 19, cy + 218, cx - 10, cy + 242);
+  ctx.bezierCurveTo(cx - 3,  cy + 254, cx + 12, cy + 257, cx + 22, cy + 247);
+  ctx.bezierCurveTo(cx + 30, cy + 237, cx + 31, cy + 215, cx + 28, cy + 195);
+  ctx.bezierCurveTo(cx + 25, cy + 173, cx + 26, cy + 158, cx + 30, cy + 148);
+  ctx.bezierCurveTo(cx + 13, cy + 138, ctx - 6,  cy + 142, cx - 22, cy + 152);
+  ctx.closePath();
+}
+
+// Sulci inside the cerebrum
+const SULCI = [
+  // Horizontal arcs (front-to-back)
+  [[-148,-22], [-72,-55],  [4,-68],   [80,-60],  [160,-40]],
+  [[-158, 35], [-88,-5],   [2,-22],   [84,-12],  [164, 20]],
+  [[-165, 88], [-96, 50],  [-16, 32], [68,  38], [158, 70]],
+  // Frontal vertical arcs
+  [[-168, 8],  [-172, 48], [-166, 90]],
+  [[-146,-10], [-144, 32], [-138, 72]],
+  // Sylvian / temporal
+  [[-95, 80],  [-25, 94],  [44, 100], [104, 110]],
+  [[-50, 58],  [24, 69],   [90, 84],  [150, 104]],
+  // Parieto-occipital
+  [[104,-126], [144,-96],  [170,-50], [178, 10]],
+  [[64,-146],  [114,-130], [160,-90], [188,-25]],
+  // Crown small fold
+  [[-38,-152], [10,-168],  [60,-162]],
+];
+
+const CB_SULCI = [
+  [[62,150], [114,155], [165,163], [200,185]],
+  [[56,168], [107,174], [158,182], [195,208]],
+  [[50,188], [100,193], [150,200], [186,226]],
+  [[48,208], [96,212],  [144,218], [174,242]],
+  [[52,225], [96,228],  [134,234]],
+];
+
+// ── Neural nodes ──────────────────────────────────────────────────────────
+function rand(i) { const x=Math.sin(i+1)*43758.5453; return x-Math.floor(x); }
+const NODES=[];
+let ni=0;
+for (let a=0; a<900 && NODES.length<58; a++) {
+  const ang=rand(ni++)*Math.PI*2, r=rand(ni++)*188;
+  const x=CX+Math.cos(ang)*r, y=(CY-22)+Math.sin(ang)*r*0.87;
+  const dx=(x-CX)/192, dy=(y-(CY-22))/172;
+  if (dx*dx+dy*dy<0.68) NODES.push({x,y,ph:rand(ni++)*Math.PI*2,sp:0.4+rand(ni++)*0.65});
+}
+
+// ── Cards ─────────────────────────────────────────────────────────────────
+const CARDS = [
+  {label:'HIGH',color:'#f87171',text:'Follow up with Jake @ CyberX',    x:CX-490,y:CY-205},
+  {label:'HIGH',color:'#f87171',text:'Update resume — AWS highlights',   x:CX+248, y:CY-238},
+  {label:'HIGH',color:'#f87171',text:'Write cover letter for CyberX',    x:CX+322, y:CY-70 },
+  {label:'MED', color:'#fbbf24',text:'Research cloud certifications',    x:CX-492,y:CY+38  },
+  {label:'MED', color:'#fbbf24',text:'Practice system design interviews',x:CX+296, y:CY+155},
+  {label:'MED', color:'#fbbf24',text:'Contact Sarah for resume review',  x:CX-420,y:CY+220 },
+  {label:'LOW', color:'#818cf8',text:'Follow up — TechCorp application', x:CX+215, y:CY+298},
+  {label:'LOW', color:'#818cf8',text:'Read NIST CSF 2.0 framework',      x:CX-338,y:CY-348 },
+];
+const CW=235, CH=58;
+
+function cc(c){return{x:c.x+CW/2,y:c.y+CH/2};}
+function ba(c){
+  const ang=Math.atan2(c.y+CH/2-(CY-22),c.x+CW/2-CX);
+  return{x:CX+Math.cos(ang)*192,y:(CY-22)+Math.sin(ang)*170};
+}
+function cp2(a,b){
+  const mx=(a.x+b.x)/2,my=(a.y+b.y)/2,dx=b.x-a.x,dy=b.y-a.y;
+  const l=Math.sqrt(dx*dx+dy*dy),bow=Math.min(l*0.22,48);
+  return{x:mx+(-dy/l)*bow,y:my+(dx/l)*bow};
+}
+
+// Stars
+const STARS=Array.from({length:180},(_,i)=>({x:rand(i*3)*W,y:rand(i*3+1)*H,r:rand(i*3+2)*1.2+0.2,a:rand(i*3+2)}));
+// Pulses
+const PULSES=CARDS.map((c,i)=>({card:c,t:i/CARDS.length,sp:0.0022+i*0.00012}));
+
+// ── Draw ──────────────────────────────────────────────────────────────────
+function draw(t){
+  ctx.fillStyle='#080512'; ctx.fillRect(0,0,W,H);
+
+  // Nebula
+  const n=ctx.createRadialGradient(CX,CY-22,0,CX,CY-22,530);
+  n.addColorStop(0,'rgba(88,28,135,0.22)'); n.addColorStop(0.5,'rgba(49,10,90,0.10)'); n.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=n; ctx.fillRect(0,0,W,H);
+
+  // Stars
+  for(const s of STARS){const tw=0.35+0.65*Math.abs(Math.sin(t*s.a*0.7+s.x));ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,Math.PI*2);ctx.fillStyle=`rgba(255,255,255,${tw*0.45})`;ctx.fill();}
+
+  // Bloom
+  for(let p=0;p<7;p++){
+    const blurs=[0,5,12,22,36,52,72][p],als=[0,0.22,0.16,0.11,0.07,0.042,0.018][p];
+    ctx.save();ctx.filter=`blur(${blurs}px)`;ctx.globalAlpha=als;
+    brainOuterPath(CX,CY);ctx.fillStyle='#a855f7';ctx.fill();
+    cerebellumPath(CX,CY);ctx.fillStyle='#9333ea';ctx.fill();
+    ctx.restore();
+  }
+
+  // Fills
+  ctx.save();
+  const fg=ctx.createRadialGradient(CX-35,CY-65,20,CX,CY,230);
+  fg.addColorStop(0,'rgba(168,85,247,0.23)');fg.addColorStop(0.6,'rgba(109,40,217,0.13)');fg.addColorStop(1,'rgba(76,29,149,0.07)');
+  brainOuterPath(CX,CY);ctx.fillStyle=fg;ctx.fill();ctx.restore();
+
+  ctx.save();
+  const cg=ctx.createRadialGradient(CX+128,CY+196,10,CX+128,CY+196,90);
+  cg.addColorStop(0,'rgba(139,92,246,0.21)');cg.addColorStop(1,'rgba(76,29,149,0.05)');
+  cerebellumPath(CX,CY);ctx.fillStyle=cg;ctx.fill();ctx.restore();
+
+  ctx.save();brainstemPath(CX,CY);ctx.fillStyle='rgba(109,40,217,0.14)';ctx.fill();ctx.restore();
+
+  // Outlines
+  ctx.save();ctx.shadowColor='#c084fc';ctx.shadowBlur=14;
+  brainOuterPath(CX,CY);ctx.strokeStyle='rgba(192,132,252,0.90)';ctx.lineWidth=2.2;ctx.stroke();
+  cerebellumPath(CX,CY);ctx.strokeStyle='rgba(167,139,250,0.80)';ctx.lineWidth=1.8;ctx.stroke();
+  brainstemPath(CX,CY);ctx.strokeStyle='rgba(167,139,250,0.68)';ctx.lineWidth=1.6;ctx.stroke();
+  ctx.restore();
+
+  // Sulci
+  ctx.save();ctx.lineWidth=1.1;ctx.strokeStyle='rgba(216,180,254,0.32)';
+  for(const pts of SULCI){
+    ctx.beginPath();ctx.moveTo(CX+pts[0][0],CY+pts[0][1]);
+    for(let i=1;i<pts.length-1;i++){const mx=(CX+pts[i][0]+CX+pts[i+1][0])/2,my=(CY+pts[i][1]+CY+pts[i+1][1])/2;ctx.quadraticCurveTo(CX+pts[i][0],CY+pts[i][1],mx,my);}
+    ctx.lineTo(CX+pts[pts.length-1][0],CY+pts[pts.length-1][1]);ctx.stroke();
+  }
+  ctx.lineWidth=0.9;ctx.strokeStyle='rgba(196,181,253,0.25)';
+  for(const pts of CB_SULCI){
+    ctx.beginPath();ctx.moveTo(CX+pts[0][0],CY+pts[0][1]);
+    for(let i=1;i<pts.length-1;i++){const mx=(CX+pts[i][0]+CX+pts[i+1][0])/2,my=(CY+pts[i][1]+CY+pts[i+1][1])/2;ctx.quadraticCurveTo(CX+pts[i][0],CY+pts[i][1],mx,my);}
+    ctx.lineTo(CX+pts[pts.length-1][0],CY+pts[pts.length-1][1]);ctx.stroke();
+  }
+  ctx.restore();
+
+  // Nodes
+  ctx.save();brainOuterPath(CX,CY);ctx.clip();
+  for(let i=0;i<NODES.length;i++)for(let j=i+1;j<NODES.length;j++){
+    const dx=NODES[i].x-NODES[j].x,dy=NODES[i].y-NODES[j].y,d=Math.sqrt(dx*dx+dy*dy);
+    if(d<70){const p=0.5+0.5*Math.sin(t*NODES[i].sp+NODES[i].ph);ctx.beginPath();ctx.moveTo(NODES[i].x,NODES[i].y);ctx.lineTo(NODES[j].x,NODES[j].y);ctx.strokeStyle=`rgba(192,132,252,${0.07+0.14*p*(1-d/70)})`;ctx.lineWidth=0.8;ctx.stroke();}
+  }
+  for(const nd of NODES){
+    const p=0.5+0.5*Math.sin(t*nd.sp+nd.ph),r=1.5+p*1.2;
+    ctx.beginPath();ctx.arc(nd.x,nd.y,r,0,Math.PI*2);ctx.fillStyle=`rgba(216,180,254,${0.4+0.5*p})`;ctx.fill();
+    ctx.beginPath();ctx.arc(nd.x,nd.y,r+3,0,Math.PI*2);ctx.fillStyle=`rgba(168,85,247,${0.07*p})`;ctx.fill();
+  }
+  ctx.restore();
+
+  // Pulses + lines
+  for(const p of PULSES){
+    const a=ba(p.card),b=cc(p.card),cp=cp2(a,b);
+    ctx.save();ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.quadraticCurveTo(cp.x,cp.y,b.x,b.y);ctx.strokeStyle='rgba(167,139,250,0.20)';ctx.lineWidth=1.2;ctx.stroke();ctx.restore();
+    const nt=p.t%1,bx=(1-nt)*(1-nt)*a.x+2*(1-nt)*nt*cp.x+nt*nt*b.x,by=(1-nt)*(1-nt)*a.y+2*(1-nt)*nt*cp.y+nt*nt*b.y;
+    ctx.save();ctx.beginPath();ctx.arc(bx,by,3.5,0,Math.PI*2);ctx.fillStyle=p.card.color;ctx.shadowColor=p.card.color;ctx.shadowBlur=10;ctx.fill();ctx.restore();
+    p.t+=p.sp;
+  }
+
+  // Cards
+  for(const c of CARDS){
+    const {x,y,color,label,text}=c;
+    ctx.save();ctx.shadowColor=color;ctx.shadowBlur=22;ctx.globalAlpha=0.28;
+    ctx.fillStyle=color;ctx.beginPath();ctx.roundRect(x,y,CW,CH,10);ctx.fill();ctx.restore();
+    const bg=ctx.createLinearGradient(x,y,x+CW,y+CH);
+    bg.addColorStop(0,'rgba(25,10,50,0.93)');bg.addColorStop(1,'rgba(15,5,35,0.90)');
+    ctx.fillStyle=bg;ctx.beginPath();ctx.roundRect(x,y,CW,CH,10);ctx.fill();
+    const [r2,g2,b2]=[parseInt(color.slice(1,3),16),parseInt(color.slice(3,5),16),parseInt(color.slice(5,7),16)];
+    ctx.strokeStyle=`rgba(${r2},${g2},${b2},0.52)`;ctx.lineWidth=1.2;ctx.beginPath();ctx.roundRect(x,y,CW,CH,10);ctx.stroke();
+    // Badge
+    ctx.fillStyle=color+'2a';ctx.strokeStyle=color+'88';ctx.lineWidth=1;ctx.beginPath();ctx.roundRect(x+10,y+11,38,15,4);ctx.fill();ctx.stroke();
+    ctx.fillStyle=color;ctx.font='bold 8.5px "SF Mono","Fira Code",monospace';ctx.textAlign='center';ctx.fillText(label,x+29,y+21.5);
+    // Text
+    ctx.fillStyle='rgba(233,213,255,0.90)';ctx.font='13px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.textAlign='left';
+    const mw=CW-62,ws=text.split(' ');let line='',lines=[];
+    for(const w of ws){const test=line+(line?' ':'')+w;if(ctx.measureText(test).width>mw&&line){lines.push(line);line=w;}else line=test;}
+    lines.push(line);
+    const lh=15,sy=y+CH/2-(lines.length*lh)/2+10;
+    for(let i=0;i<lines.length;i++)ctx.fillText(lines[i],x+57,sy+i*lh);
+  }
+
+  // Watermark
+  ctx.save();ctx.font='bold 20px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.fillStyle='rgba(192,132,252,0.38)';ctx.textAlign='right';ctx.fillText('braindump.',W-28,H-20);ctx.restore();
+}
+
+let st=null;
+function loop(ts){if(!st)st=ts;draw((ts-st)/1000);requestAnimationFrame(loop);}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
