@@ -60,30 +60,35 @@ async function main() {
       title: 'Research cloud security certifications in demand',
       description: 'AWS Security Specialty, CISSP, and CKS (Kubernetes Security) seem most relevant for senior roles.',
       priority: 'medium', status: 'pending',
+      subtasks: [],
     },
     {
       user_id: uid, brain_dump_id: dump3!.id,
       title: 'Write custom cover letter for CyberX',
       description: 'Emphasise zero-trust architecture and AWS experience. Reference Jake\'s mention of their current migration project.',
       priority: 'high', status: 'pending',
+      subtasks: [],
     },
     {
       user_id: uid, brain_dump_id: dump3!.id,
       title: 'Practice system design interviews',
       description: 'Focus on distributed systems, AWS architecture, and security threat modelling.',
       priority: 'medium', status: 'pending',
+      subtasks: [],
     },
     {
       user_id: uid, brain_dump_id: dump1!.id,
       title: 'Follow up with TechCorp application',
       description: 'Applied last month, no response. Send a polite follow-up email.',
       priority: 'low', status: 'pending',
+      subtasks: [],
     },
     {
       user_id: uid, brain_dump_id: dump2!.id,
       title: 'Read NIST CSF 2.0 framework',
       description: 'New version released. Relevant for senior security roles.',
       priority: 'low', status: 'completed',
+      subtasks: [],
     },
   ]
 

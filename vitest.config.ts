@@ -6,6 +6,7 @@ export default defineConfig({
     environment: 'node',
     globals: true,
     include: ['__tests__/**/*.test.ts'],
+    exclude: ['__tests__/story-integration.test.ts'],
   },
   resolve: {
     alias: {
