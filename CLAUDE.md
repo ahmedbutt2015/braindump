@@ -18,12 +18,14 @@ The middleware at `middleware.ts` calls `lib/supabase/middleware.ts` which refre
 
 **AI (task extraction):** `app/api/extract-tasks/route.ts` calls Hugging Face directly via `fetch`. Model: `deepseek-ai/DeepSeek-V3-0324` via the HF router (`router.huggingface.co/v1/chat/completions`). Pipeline:
 1. Fetch last 5 brain dumps + last 15 pending tasks (with subtasks) for context
-2. POST to HF with a system prompt that demands raw JSON — no markdown
-3. Strip any accidental code fences, `JSON.parse` + Zod validate
-4. Apply enrichments (append context to existing task descriptions) and subtask additions
-5. Save dump + new tasks + api_log to Supabase
+2. POST to HF with a system prompt that demands raw JSON — no markdown — and a verbatim `evidence` quote from the dump with every enrichment and subtask_addition
+3. Strip any accidental code fences, `JSON.parse` + Zod validate the envelope only. `enrichments` and `subtask_additions` stay `unknown[]` so one malformed item cannot fail the parse
+4. `guardActions` (`lib/ai-guard.ts`) checks each enrichment/subtask_addition in code: the task must be one the model was shown, the evidence must appear in the dump, size and count limits hold. Verdict per item: `apply`, `propose` or `reject`
+5. Save dump + new tasks to Supabase
+6. `applyGuardDecisions` (`lib/ai-apply.ts`) writes each `apply` item through the `apply_ai_action` RPC (compare-and-swap on the task field plus its `ai_actions` audit row, one transaction). A `conflict` or `task_not_found` outcome, or any RPC error, becomes a `proposed` row and the task is untouched. `propose` items become `proposed` rows, `reject` items become `rejected` rows with `task_id` null — all in one awaited insert
+7. Save the api_log. `enrichments_applied` counts only actions the RPC reported as `applied`
 
-Response shape: `{ tasks[], enrichments[], subtask_additions[], summary }`. All three arrays are applied separately so new dumps can update existing tasks without duplicating them.
+Response shape from the model: `{ tasks[], enrichments[], subtask_additions[], summary }`. Response from the route adds `proposedCount` (guard proposals + stale targets + apply errors; not rejects). Proposed rows have no review UI yet. Revert is `POST /api/ai-actions/[id]/revert`, which ignores the body and calls `apply_ai_action(p_revert_of => id)`: strict compare-and-swap, `reverted` → 200, `conflict` → 409, `not_revertable`/`task_not_found` → 404, anything else → 500. There is no revert UI yet.
 
 Uses `HUGGINGFACE_API_TOKEN`. Cold-start handling: HF free tier returns `{ error: "...loading..." }` with status 503. The route returns `{ modelLoading: true, retryAfter: N }` and the dashboard shows a warning toast.
 
@@ -39,6 +41,11 @@ Uses `HUGGINGFACE_API_TOKEN`. Cold-start handling: HF free tier returns `{ error
 | File | Purpose |
 |------|---------|
 | `app/api/extract-tasks/route.ts` | Core AI pipeline: dump → tasks + enrichments + subtask_additions |
+| `lib/ai-schemas.ts` | Zod schemas for the model response (envelope + per-item enrichment/subtask schemas) |
+| `lib/ai-guard.ts` | Pure `guardActions`: deterministic apply/propose/reject verdicts for model-proposed task mutations |
+| `lib/ai-apply.ts` | `applyGuardDecisions`: applies verdicts via `apply_ai_action`, records proposals and rejects in `ai_actions` |
+| `lib/ai-revert.ts` | `isUuid` + `mapRevertResult`: pure id validation and RPC-result → HTTP mapping for the revert route |
+| `app/api/ai-actions/[id]/revert/route.ts` | POST: undo one applied AI action via `apply_ai_action(p_revert_of)` |
 | `app/api/transcribe/route.ts` | Voice → text via HF Whisper |
 | `app/api/tasks/[id]/route.ts` | PATCH (full field set) + DELETE for individual tasks |
 | `app/dashboard/page.tsx` | Server component: auth check + SSR data fetch, wrapped in ErrorBoundary |
@@ -78,7 +85,7 @@ RLS is enabled on all three tables via migration 002. `updated_at` is kept accur
 1. User speaks or types → `CaptureZone` calls `onSubmit(content)`
 2. `DashboardContent.handleDumpSubmit` POSTs to `/api/extract-tasks`
 3. API route fetches context, calls DeepSeek-V3, saves dump + tasks + applies enrichments + logs to Supabase
-4. Returns `{ tasksExtracted, enrichmentsApplied, subtaskAdditions, summary, extractedTasks, transcript }`
+4. Returns `{ tasksExtracted, enrichmentsApplied, subtaskAdditions, proposedCount, summary, extractedTasks, transcript }`
 5. Client calls `mutate('tasks')` and `mutate('dumps')` to revalidate SWR caches
 6. Task list and recent dumps sidebar re-render with fresh data; toast shows the summary
 
@@ -184,3 +191,4 @@ These rules govern how AI coding agents work in this repo.
 6. **Always await database writes in API routes.** Vercel ends the function when the response returns, and unawaited work is dropped.
 7. **Verify before done.** `npm run typecheck && npm test` must pass before a task is considered complete, and the diff is reviewed by a human.
 8. **Failures become rules.** When the AI makes a mistake, add a rule or a test that blocks that failure class. Do not just fix the one instance.
+9. **Model output mutates existing tasks only through `guardActions` and `apply_ai_action`.** Anything the model proposes for a task that already exists (enrichments, subtask additions, and any future kind) must pass `guardActions`, then be written by calling the `apply_ai_action` RPC. No direct `.update()` on `tasks` from model output, no bypass of the guard "just this once", no trusting a model-supplied id, quote or text without the code check. Anything that fails the guard or the compare-and-swap is stored in `ai_actions` as `proposed` or `rejected`, never applied.

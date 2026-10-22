@@ -2,40 +2,14 @@ import { createClient } from '@/lib/supabase/server'
 import { getHuggingFaceToken, maskSecret, serializeError } from '@/lib/huggingface'
 import { checkDumpRateLimit } from '@/lib/rate-limit'
 import { embedQuery, embedTaskBatch, toVectorLiteral } from '@/lib/embeddings'
-import { z } from 'zod'
+import { ExtractedTasksSchema, type ExtractedTasks } from '@/lib/ai-schemas'
+import { DEFAULT_GUARD_LIMITS, guardActions, type AllowedTask } from '@/lib/ai-guard'
+import { applyGuardDecisions } from '@/lib/ai-apply'
 
 const HF_MODEL = 'deepseek-ai/DeepSeek-V3-0324:novita'
 const HF_API_URL = 'https://router.huggingface.co/v1/chat/completions'
 
 export const preferredRegion = 'iad1'
-
-const nullableString = z.string().nullable().optional().transform(v =>
-  (v === 'null' || v === 'undefined' || v === '' || v == null) ? null : v
-)
-
-const TaskSchema = z.object({
-  title: z.string(),
-  description: nullableString,
-  priority: z.enum(['low', 'medium', 'high']).catch('medium'),
-  due_date: nullableString,
-})
-
-const EnrichmentSchema = z.object({
-  task_id: z.string().nullable().optional(),
-  additional_context: z.string().nullable().optional(),
-})
-
-const SubtaskAdditionSchema = z.object({
-  task_id: z.string().nullable().optional(),
-  subtask_title: z.string().nullable().optional(),
-})
-
-const ExtractedTasksSchema = z.object({
-  tasks: z.array(TaskSchema),
-  enrichments: z.array(EnrichmentSchema).optional().default([]),
-  subtask_additions: z.array(SubtaskAdditionSchema).optional().default([]),
-  summary: z.string(),
-})
 
 function buildSystemPrompt(): string {
   const today = new Date().toISOString().split('T')[0]
@@ -58,13 +32,15 @@ Required JSON format:
   "enrichments": [
     {
       "task_id": "exact UUID of the existing task",
-      "additional_context": "new information to append to that task's description"
+      "additional_context": "new information to append to that task's description",
+      "evidence": "exact words copied from the brain dump that justify this update"
     }
   ],
   "subtask_additions": [
     {
       "task_id": "exact UUID of the existing task",
-      "subtask_title": "specific action step that belongs under this task"
+      "subtask_title": "specific action step that belongs under this task",
+      "evidence": "exact words copied from the brain dump that justify this subtask"
     }
   ],
   "summary": "one sentence describing what was processed"
@@ -92,6 +68,13 @@ D. NOT A TASK: Negative statements ("I don't want X"), preferences, or pure obse
    → Attach as an enrichment constraint if related to an existing task, otherwise discard.
 
 STEP 3 — OUTPUT: Every item from Step 1 must appear in exactly one of: tasks, enrichments, subtask_additions, or be explicitly discarded as non-actionable. Nothing may be silently dropped.
+
+EVIDENCE: Every enrichment and every subtask_addition MUST carry an "evidence" quote.
+- Copy it character for character from the "Brain dump to process" text. Do not paraphrase, summarise, fix spelling, or join separate sentences, and do not use "..." to skip words.
+- Quote only the current brain dump. Never quote the recent dumps or the existing task text.
+- It must be one contiguous span of ${DEFAULT_GUARD_LIMITS.evidenceMinLength} to ${DEFAULT_GUARD_LIMITS.evidenceMaxLength} characters.
+- If you cannot quote words from the current dump that support the change, leave the enrichment or subtask_addition out.
+Code checks every quote against the dump. An update whose quote is missing or does not appear verbatim is not applied.
 
 CRITICAL: One action per item — never both a new task AND an enrichment/subtask for the same content.
 Use the exact task_id UUID from the provided list. Never fabricate or guess a UUID.`
@@ -243,7 +226,7 @@ export async function POST(request: Request) {
           { role: 'system', content: buildSystemPrompt() },
           { role: 'user', content: userMessage },
         ],
-        max_tokens: 2000,
+        max_tokens: 3000,
         temperature: 0.1,
       }),
       signal: AbortSignal.timeout(30000),
@@ -282,7 +265,7 @@ export async function POST(request: Request) {
       .replace(/\s*```$/, '')
       .trim()
 
-    let output: z.infer<typeof ExtractedTasksSchema>
+    let output: ExtractedTasks
     try {
       output = ExtractedTasksSchema.parse(JSON.parse(jsonStr))
     } catch {
@@ -293,34 +276,33 @@ export async function POST(request: Request) {
       return Response.json({ error: 'AI returned an unexpected format. Please try again.' }, { status: 500 })
     }
 
-    // Build a set of valid task IDs belonging to this user
-    const validTaskIds = new Set((existingTasks ?? []).map(t => t.id))
-
-    // UUID pattern — filter out placeholder strings the model sometimes returns
-    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-    // Drop enrichments/subtask_additions that have null/empty/placeholder values
-    output.enrichments = (output.enrichments ?? []).filter(
-      e => e.task_id && UUID_RE.test(e.task_id) && e.additional_context?.trim()
+    // Every enrichment / subtask addition is checked in code before it can touch
+    // a task. The guard rejects malformed items one by one, so a single bad item
+    // no longer fails the request. Keys are the ids of the tasks the model was shown.
+    const allowedTasks = new Map<string, AllowedTask>(
+      existingTasks.map(t => [t.id.toLowerCase(), { title: t.title, description: t.description, subtasks: t.subtasks }])
     )
-    output.subtask_additions = (output.subtask_additions ?? []).filter(
-      s => s.task_id && UUID_RE.test(s.task_id) && s.subtask_title?.trim()
-    )
+    const decisions = guardActions({
+      dump: content,
+      allowedTasks,
+      enrichments: output.enrichments,
+      subtaskAdditions: output.subtask_additions,
+    })
 
     // Code-level dedup: if the model added a subtask or enrichment for existing task content,
     // drop any new task whose title shares 2+ meaningful words with that subtask/enrichment.
     // This catches the "double-dip" where the model enriches AND creates a duplicate new task.
-    if (output.subtask_additions.length > 0 || output.enrichments.length > 0) {
+    // Only actions the guard cleared count: a proposal is not applied, so it must not
+    // suppress a new task.
+    const clearedTexts = decisions.filter(d => d.verdict === 'apply').map(d => d.payload.text ?? '')
+    if (clearedTexts.length > 0) {
       const coveredWords = new Set<string>()
       const STOP_WORDS = new Set(['the', 'and', 'for', 'with', 'that', 'this', 'from', 'into', 'also', 'just', 'then'])
       const tokenize = (text: string) =>
         text.toLowerCase().split(/[\s\-\/]+/).map(w => w.replace(/[^a-z0-9]/g, '')).filter(w => w.length > 3 && !STOP_WORDS.has(w))
 
-      for (const s of output.subtask_additions) {
-        tokenize(s.subtask_title!).forEach(w => coveredWords.add(w))
-      }
-      for (const e of output.enrichments) {
-        tokenize(e.additional_context!).forEach(w => coveredWords.add(w))
+      for (const text of clearedTexts) {
+        tokenize(text).forEach(w => coveredWords.add(w))
       }
 
       output.tasks = output.tasks.filter(task => {
@@ -370,56 +352,17 @@ export async function POST(request: Request) {
       }
     }
 
-    // Apply enrichments — append new context to existing task descriptions
-    const validEnrichments = (output.enrichments ?? []).filter(e => validTaskIds.has(e.task_id!))
-    let enrichmentsApplied = 0
-
-    for (const enrichment of validEnrichments) {
-      const existing = existingTasks?.find(t => t.id === enrichment.task_id)
-      if (!existing) continue
-
-      const newDescription = existing.description
-        ? `${existing.description}\n\nUpdate: ${enrichment.additional_context}`
-        : enrichment.additional_context!
-
-      const { error: enrichError } = await supabase
-        .from('tasks')
-        .update({ description: newDescription, updated_at: new Date().toISOString() })
-        .eq('id', enrichment.task_id!)
-        .eq('user_id', user.id)
-
-      if (!enrichError) enrichmentsApplied++
-      else console.warn('[extract-tasks] Failed to apply enrichment', { requestId, taskId: enrichment.task_id, enrichError })
-    }
-
-    // Apply subtask additions — append new subtasks to existing tasks
-    const validSubtaskAdditions = (output.subtask_additions ?? []).filter(s => validTaskIds.has(s.task_id!))
-    let subtaskAdditions = 0
-
-    for (const addition of validSubtaskAdditions) {
-      const existing = existingTasks?.find(t => t.id === addition.task_id)
-      if (!existing) continue
-
-      const currentSubtasks = Array.isArray(existing.subtasks) ? existing.subtasks : []
-      const newSubtask = {
-        id: crypto.randomUUID(),
-        title: addition.subtask_title!,
-        completed: false,
-        created_at: new Date().toISOString(),
-      }
-
-      const { error: subtaskError } = await supabase
-        .from('tasks')
-        .update({
-          subtasks: [...currentSubtasks, newSubtask],
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', addition.task_id!)
-        .eq('user_id', user.id)
-
-      if (!subtaskError) subtaskAdditions++
-      else console.warn('[extract-tasks] Failed to add subtask', { requestId, taskId: addition.task_id, subtaskError })
-    }
+    // Apply the cleared actions through apply_ai_action (compare-and-swap) and record the
+    // rest as proposals. Awaited so Vercel doesn't drop the writes.
+    const applied = await applyGuardDecisions({
+      client: supabase,
+      decisions,
+      allowedTasks,
+      userId: user.id,
+      brainDumpId: brainDump.id,
+      requestId,
+    })
+    const { enrichmentsApplied, subtaskAdditions, proposedCount } = applied
 
     // Log the API call — awaited so Vercel doesn't drop it before the function terminates
     const { error: logError } = await supabase.from('api_logs').insert({
@@ -440,6 +383,7 @@ export async function POST(request: Request) {
       tasksExtracted: output.tasks.length,
       enrichmentsApplied,
       subtaskAdditions,
+      proposedCount,
       summary: output.summary,
       extractedTasks: output.tasks,
       transcript: content,
