@@ -1,35 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { z } from 'zod'
-
-// Re-declare the schemas here so tests don't depend on importing server-only
-// route files. If the schema in route.ts changes, update this copy too.
-const nullableString = z.string().nullable().optional().transform(v =>
-  (v === 'null' || v === 'undefined' || v === '' || v == null) ? null : v
-)
-
-const TaskSchema = z.object({
-  title: z.string(),
-  description: nullableString,
-  priority: z.enum(['low', 'medium', 'high']).catch('medium'),
-  due_date: nullableString,
-})
-
-const EnrichmentSchema = z.object({
-  task_id: z.string().nullable().optional(),
-  additional_context: z.string().nullable().optional(),
-})
-
-const SubtaskAdditionSchema = z.object({
-  task_id: z.string().nullable().optional(),
-  subtask_title: z.string().nullable().optional(),
-})
-
-const ExtractedTasksSchema = z.object({
-  tasks: z.array(TaskSchema),
-  enrichments: z.array(EnrichmentSchema).optional().default([]),
-  subtask_additions: z.array(SubtaskAdditionSchema).optional().default([]),
-  summary: z.string(),
-})
+import { ExtractedTasksSchema, EnrichmentSchema, SubtaskAdditionSchema } from '@/lib/ai-schemas'
 
 describe('ExtractedTasksSchema', () => {
   it('parses a valid full response', () => {
@@ -86,6 +56,41 @@ describe('ExtractedTasksSchema', () => {
   it('throws on missing summary', () => {
     const raw = { tasks: [] }
     expect(() => ExtractedTasksSchema.parse(raw)).toThrow()
+  })
+
+  it('does not fail the whole parse when an enrichment or subtask item is malformed', () => {
+    const raw = {
+      tasks: [{ title: 'Send invoice', priority: 'high' }],
+      enrichments: [{ task_id: 42 }, null, 'oops'],
+      subtask_additions: [{ subtask_title: { nested: true } }],
+      summary: 'ok',
+    }
+    const result = ExtractedTasksSchema.parse(raw)
+    expect(result.tasks).toHaveLength(1)
+    expect(result.enrichments).toHaveLength(3)
+    expect(result.subtask_additions).toHaveLength(1)
+  })
+
+  it('still fails the parse when tasks is not an array', () => {
+    expect(() => ExtractedTasksSchema.parse({ tasks: 'nope', summary: 'ok' })).toThrow()
+  })
+})
+
+describe('EnrichmentSchema / SubtaskAdditionSchema evidence field', () => {
+  it('accepts a present evidence string', () => {
+    expect(EnrichmentSchema.parse({ task_id: 'x', additional_context: 'y', evidence: 'quote' }).evidence).toBe('quote')
+    expect(SubtaskAdditionSchema.parse({ task_id: 'x', subtask_title: 'y', evidence: 'quote' }).evidence).toBe('quote')
+  })
+
+  it('accepts absent and null evidence (the guard downgrades these, the parse does not fail)', () => {
+    expect(EnrichmentSchema.parse({ task_id: 'x', additional_context: 'y' }).evidence).toBeUndefined()
+    expect(EnrichmentSchema.parse({ task_id: 'x', additional_context: 'y', evidence: null }).evidence).toBeNull()
+    expect(SubtaskAdditionSchema.parse({ task_id: 'x', subtask_title: 'y' }).evidence).toBeUndefined()
+  })
+
+  it('rejects non-string evidence', () => {
+    expect(EnrichmentSchema.safeParse({ task_id: 'x', additional_context: 'y', evidence: { q: 1 } }).success).toBe(false)
+    expect(SubtaskAdditionSchema.safeParse({ task_id: 'x', subtask_title: 'y', evidence: 5 }).success).toBe(false)
   })
 })
 
